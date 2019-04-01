@@ -1,0 +1,4 @@
+*.dSYM
+.vscode/ipch/*
+node
+routing_server

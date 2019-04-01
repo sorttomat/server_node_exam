@@ -2,11 +2,11 @@ CCFLAGS= -g
 
 all: routing_server node
 
-routing_server: <Her skal alle c-filer som routing_server avhenger av>
-	gcc <Her skal alle c-filer som routing_server avhenger av> $(CCFLAGS) -o routing_server
+routing_server: 
+	gcc source_router/routing_server.c $(CCFLAGS) -o routing_server
 
-node: <Her skal alle c-filer som node avhenger av>
-	gcc <Her skal alle c-filer som node avhenger av> $(CCFLAGS) -o node
+node: 
+	gcc source_node/node.c $(CCFLAGS) -o node
 
 
 run: all
