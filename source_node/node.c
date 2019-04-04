@@ -38,7 +38,8 @@ int create_and_connect_socket() {
 
     printf("%s\n", buffer);
 
-    char *send_text = "1234Heihei";
+    char send_text[255];
+    fgets(send_text, 255, stdin); //For morroskyld
     int number_of_bytes = strlen(send_text);
 
     bytes = send(client_socket, &number_of_bytes, sizeof(int), 0);
