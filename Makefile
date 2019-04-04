@@ -1,4 +1,4 @@
-CCFLAGS= -g 
+CCFLAGS= -g -std=c99
 
 all: routing_server node
 
