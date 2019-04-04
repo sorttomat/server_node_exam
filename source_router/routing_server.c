@@ -68,7 +68,6 @@ int create_server_socket() {
         perror("Could not listen");
         exit(EXIT_FAILURE);
     }
-
     return server_socket;
 }
 
@@ -90,13 +89,13 @@ int add_client(int socket, struct sockaddr_in *client_addr, socklen_t addrlen, s
             clients[i].ip = ip_buffer;
             clients[i].port = ntohs(client_addr->sin_port);
 
-            write(socket, RESPONSE_SUCCESS, strlen(RESPONSE_SUCCESS));
+            send(socket, RESPONSE_SUCCESS, strlen(RESPONSE_SUCCESS), 0);
             return 0;
         }
     }
 
     /* We don't have capacity to handle this client*/
-    write(socket, RESPONSE_FULL, strlen(RESPONSE_FULL));
+    send(socket, RESPONSE_FULL, strlen(RESPONSE_FULL), 0);
     free(ip_buffer);
     close(socket);
     return 1;
@@ -120,32 +119,65 @@ int accept_new_client(int socket_listener, struct client *clients) {
     return client_socket;
 }
 
-void receive_from_client(int client_socket, struct client *clients) {
-    printf("Receiving from client with socket %d\n", client_socket);
+char *receive_message(int client_socket, int *bytes_received) {
+    int recv_bytes = 0;
+
+    int total_size = 0;
+    int remaining_recv = 0;
+
+    recv_bytes = recv(client_socket, &total_size, sizeof(int), 0);
+    if (recv_bytes < 0) {
+        return NULL;
+    }
+
+    printf("Bytes to receive: %d\n", total_size);
+    remaining_recv = total_size;
+
+    char *message = malloc(total_size+1);
+
+    while (*bytes_received != total_size) {
+        recv_bytes = recv(client_socket, message + *bytes_received, remaining_recv, 0);
+
+        if (recv_bytes < 0) {
+            return NULL;
+        }
+
+        if (recv_bytes == 0) {
+            break;
+        }
+        *bytes_received += recv_bytes;
+        remaining_recv -= recv_bytes;
+    }
+
+    return message;
+}
+
+int receive_from_client(int client_socket, struct client *clients) {
     int max_size_recv = 1000;
-    int recv_bytes;
+    int recv_bytes = 0;
 
-    int number;
-    recv_bytes = recv(client_socket, &number, sizeof(int), 0);
+    char *message;
 
-    printf("%d\n", number);
-    char *name = malloc(sizeof(char) * max_size_recv);
-    recv_bytes = recv(client_socket, name, max_size_recv, 0);
-    name[recv_bytes] = '\0';
-    printf("From connection: %s\n", name);
+    message = receive_message(client_socket, &recv_bytes);
+    message[recv_bytes] = '\0';
+
+    printf("Number of bytes: %d\n", recv_bytes);
+    if (message == NULL) {
+        return 1;
+    }
+    printf("Message: %s\n", message);
 
     for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
         if (clients[j].fd == client_socket) {
-            clients[j].number_of_neighbors = number;
-            clients[j].name = name;
+            clients[j].name = message;
         }
     }
+    return 0;
 }
 
 int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *largest_fd, struct client *clients, int *number_of_clients_added) {
         /* Go through all possible file descriptors */
     for (int i = 0; i <= *largest_fd; ++i) {
-        printf("Current socket: %d\n", i);
         if (FD_ISSET(i, read_fds)) {
             if (i == socket_listener) {
                 /* Accept new client */
@@ -163,11 +195,17 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
             } 
             else {
                 /* Receive from existing client */
-                receive_from_client(i, clients);
-                (*number_of_clients_added)++;
-                printf("%d\n", *number_of_clients_added);
-                if (*number_of_clients_added == MAX_NUM_CLIENTS) {
-                    return 0;
+                int ret = receive_from_client(i, clients);
+                
+                if (ret == 0) {
+                    (*number_of_clients_added)++;
+                    printf("%d\n", *number_of_clients_added);
+                    if (*number_of_clients_added == MAX_NUM_CLIENTS) {
+                        return 0;
+                    }
+
+                } else if (ret == 1) {
+                    FD_CLR(i, fds);
                 }
             }
         }
@@ -180,7 +218,6 @@ struct client* run_server(int socket_listener) {
     int largest_fd = socket_listener;
     int number_of_clients_added = 0;
 
-    
     FD_ZERO(&fds);
     FD_SET(socket_listener, &fds);
 
@@ -201,6 +238,13 @@ struct client* run_server(int socket_listener) {
         int ret = go_through_fds(socket_listener, &read_fds, &fds, &largest_fd, clients, &number_of_clients_added);
         if (ret == 0) {
             printf("All clients added!\n");
+
+            char *send_thing = "All clients added, here is a message!\n";
+
+            for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
+                struct client current = clients[j];
+                ssize_t bytes = send(current.fd, send_thing, strlen(send_thing), 0);
+            }
             return clients;
         }
     }
