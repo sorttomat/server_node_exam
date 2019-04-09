@@ -1,6 +1,6 @@
 CCFLAGS= -g -std=c99
 
-all: routing_server node
+all: clean routing_server node
 
 routing_server: 
 	gcc source_router/routing_server.c $(CCFLAGS) -o routing_server

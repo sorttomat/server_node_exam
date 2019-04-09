@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <assert.h>
 
+#include "../source_shared/protocol.h"
+
 int BASEPORT;
 int BACKLOG_SIZE = 10;
 int MAX_NUM_CLIENTS;
@@ -26,7 +28,7 @@ struct client {
     int number_of_neighbors;
 };
 
-void remove_client(int fd, struct client *clients) {
+void remove_client(int fd) {
     int i;
 
     for (i = 0; i < MAX_NUM_CLIENTS; ++i) {
@@ -50,21 +52,19 @@ int create_server_socket() {
         exit(EXIT_FAILURE);
     }
 
-    server_addr.sin_family = AF_INET; /* IPv4 address */
-    server_addr.sin_port = htons(BASEPORT); /* Listen to port 21400. Encode 21400 using network byte order.*/
-    server_addr.sin_addr.s_addr = INADDR_ANY; /* Accept connections from anyone. */
+    server_addr.sin_family = AF_INET; 
+    server_addr.sin_port = htons(BASEPORT);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
     
     setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
 
     ret = bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr));
-
     if (ret == 1) {
         perror("Could not bind to address");
         exit(EXIT_FAILURE);
     }
 
     ret = listen(server_socket, BACKLOG_SIZE);
-
     if (ret == -1) {
         perror("Could not listen");
         exit(EXIT_FAILURE);
@@ -72,16 +72,14 @@ int create_server_socket() {
     return server_socket;
 }
 
-int add_client(int socket, struct sockaddr_in *client_addr, socklen_t addrlen, struct client clients[]) {
+int add_client(int socket, struct sockaddr_in *client_addr, socklen_t addrlen) {
     char *ip_buffer = malloc(16);
     int i;
-
 
     if (!inet_ntop(client_addr->sin_family, &(client_addr->sin_addr), ip_buffer, addrlen)) {
         perror("inet_ntop");
         strcpy(ip_buffer, "N/A");
     }
-
 
     for (i = 0; i < MAX_NUM_CLIENTS; ++i) {
         /* We have capacity to handle this client*/
@@ -103,59 +101,69 @@ int add_client(int socket, struct sockaddr_in *client_addr, socklen_t addrlen, s
     return 1;
 }
 
-int accept_new_client(int socket_listener, struct client *clients) {
+int accept_new_client(int socket_listener) {
     struct sockaddr_in client_addr;
     socklen_t addrlen = sizeof(struct sockaddr_in);
 
-    int client_socket = accept(socket_listener,
-        (struct sockaddr*)&client_addr,
-        &addrlen);
+    int client_socket = accept(socket_listener, (struct sockaddr*) &client_addr, &addrlen);
     if (client_socket == -1) {
         perror("accept");
         return -1;
     }
 
-    if (add_client(client_socket, &client_addr, addrlen, clients)) {
+    if (add_client(client_socket, &client_addr, addrlen)) {
         return -1;
     }
     return client_socket;
 }
 
-char *receive_message(int client_socket, int *bytes_received) {
+int receive_size(int client_socket) {
     int recv_bytes = 0;
-
     int total_size = 0;
     int remaining_recv = 0;
 
     recv_bytes = recv(client_socket, &total_size, sizeof(int), 0);
-    if (recv_bytes <= 0) {
-        printf("Disconnection with recv_bytes = %d\n", recv_bytes);
-        return NULL;
+    if (recv_bytes == -1) {
+        printf("Something wrong with recv\n");
+        return EXIT_FAILURE;
     }
+    if (recv_bytes ==  0) {
+        printf("Disconnection\n");
+        return EXIT_FAILURE;
+    }
+    
+    return total_size;
+}
+
+char *receive_message(int client_socket, int *bytes_received) {
+    int total_size = receive_size(client_socket);
+    int remaining_recv = total_size;
+    int recv_bytes = 0;
 
     printf("Bytes to receive: %d\nFrom socket: %d\n", total_size, client_socket);
-    remaining_recv = total_size;
 
     char *message = malloc(total_size+1);
 
     while (*bytes_received != total_size) {
         recv_bytes = recv(client_socket, message + *bytes_received, remaining_recv, 0);
-        if (recv_bytes <= 0) {
-            printf("Disconnection with recv_bytes = %d\n", recv_bytes);
+        if (recv_bytes == -1) {
+            printf("Something wring with recv\n");
+            free(message);
             return NULL;    
         }
-        printf("Bytes received: %d\n", recv_bytes);
 
         if (recv_bytes == 0) {
+            printf("Disconnection with recv_bytes = %d\n", recv_bytes); 
             break;
         }
+        printf("Received %d bytes from socket %d\n", recv_bytes, client_socket);
         *bytes_received += recv_bytes;
         remaining_recv -= recv_bytes;
     }
     return message;
 }
 
-int receive_from_client(int client_socket, struct client *clients) {
+int receive_from_client(int client_socket) {
     int max_size_recv = 1000;
     int recv_bytes = 0;
 
@@ -164,7 +172,7 @@ int receive_from_client(int client_socket, struct client *clients) {
     message = receive_message(client_socket, &recv_bytes);
 
     if (message == NULL) {
-        printf("Dusconnection gets us here!\n");
+        printf("Disconnection gets us here!\n");
         return 1;
     }
 
@@ -180,15 +188,14 @@ int receive_from_client(int client_socket, struct client *clients) {
     return 0;
 }
 
-int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *largest_fd, struct client *clients, int *number_of_clients_added) {
+int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *largest_fd, int *number_of_clients_added) {
         /* Go through all possible file descriptors */
     for (int i = 0; i <= *largest_fd; ++i) {
-        printf(".");
         if (FD_ISSET(i, read_fds)) {
             printf("Looking at socket %d\n", i);
             if (i == socket_listener) {
                 /* Accept new client */
-                int client_socket = accept_new_client(socket_listener, clients);
+                int client_socket = accept_new_client(socket_listener);
 
                 if (client_socket == -1) {
                     perror("accept or add");
@@ -202,7 +209,7 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
             } 
             else {
                 /* Receive from existing client */
-                int ret = receive_from_client(i, clients);
+                int ret = receive_from_client(i);
                 
                 if (ret == 0) {
                     (*number_of_clients_added)++;
@@ -215,12 +222,7 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
                     printf("Client disconnected :(\n");
                     FD_CLR(i, fds);
 
-                    // for (int k = 0; k < MAX_NUM_CLIENTS; k++) {
-                    //     if (clients[k].fd == i) {
-                    //         clients[k].fd = -1;
-                    //     }
-                    // }
-                    remove_client(i, clients);
+                    remove_client(i);
                 }
             }
         }
@@ -228,7 +230,7 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
     return 1;
 }
 
-struct client* run_server(int socket_listener) {
+void run_server(int socket_listener) {
     fd_set fds, read_fds;
     int largest_fd = socket_listener;
     int number_of_clients_added = 0;
@@ -236,36 +238,30 @@ struct client* run_server(int socket_listener) {
     FD_ZERO(&fds);
     FD_SET(socket_listener, &fds);
 
-    struct client *clients = malloc(sizeof(struct client) * MAX_NUM_CLIENTS);
-
     for (int i = 0; i < MAX_NUM_CLIENTS; ++i) {
         clients[i].fd = -1;
     }
 
-    while (1) {
+    int ret = 1;
+    while (ret != 0) {
         read_fds = fds;
-        printf("Nå kommer jeg hit! \n");
         if (select(largest_fd+1, &read_fds, NULL, NULL, NULL) == -1) {
             perror("select");
-            return NULL;
+            return;
         }
 
-        printf("Blir blokkert av select\n");
         /* Go through all possible file descriptors */
-        int ret = go_through_fds(socket_listener, &read_fds, &fds, &largest_fd, clients, &number_of_clients_added);
-        if (ret == 0) {
-            printf("All clients added!\n");
-
-            char *send_thing = "All clients added, here is a message!\n";
-
-            for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
-                struct client current = clients[j];
-                ssize_t bytes = send(current.fd, send_thing, strlen(send_thing), 0);
-            }
-            return clients;
-        }
+        ret = go_through_fds(socket_listener, &read_fds, &fds, &largest_fd, &number_of_clients_added);
     }
-    return NULL;
+    
+    printf("All clients added!\n");
+
+    char *send_thing = "All clients added, here is a message!\n";
+
+    for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
+        struct client current = clients[j];
+        ssize_t bytes = send(current.fd, send_thing, strlen(send_thing), 0);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -276,8 +272,10 @@ int main(int argc, char *argv[]) {
 
     int server_socket = create_server_socket();
 
-    clients = run_server(server_socket);
-    assert(clients != NULL);
+    struct client clients_temp[MAX_NUM_CLIENTS];
+    clients = clients_temp;
+
+    run_server(server_socket);
 
     for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
         struct client current = clients[i];
