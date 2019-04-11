@@ -32,9 +32,9 @@ struct header {
     int number_of_edges;
 };
 
-char RESPONSE_SUCCESS[] = "Thank you for connecting!\n";
-char RESPONSE_FULL[] = "Client list is full :(\n";
-char ALL_CLIENTS_CONNECTED[] = "All clients connected! Server disconnecting in 3... 2... 1...\n";
+#define RESPONSE_SUCCESS "Thank you for connecting!\n"
+#define RESPONSE_FULL "Client list is full :(\n"
+#define ALL_CLIENTS_CONNECTED "All clients connected! Server disconnecting in 3... 2... 1...\n"
 
 
 void construct_header(char *buffer, struct node node_to_send);
