@@ -1,13 +1,13 @@
+CC = gcc
 CCFLAGS= -g -std=c99
 
 all: clean routing_server node
 
-routing_server: 
-	gcc source_router/routing_server.c $(CCFLAGS) -o routing_server
+routing_server: source_router/routing_server.c source_shared/protocol.c
+	$(CC) $(CCFLAGS) $^ -o $@
 
-node: 
-	gcc source_node/node.c $(CCFLAGS) -o node
-
+node: source_node/node.c source_shared/protocol.c
+	$(CC) $(CCFLAGS) $^ -o $@
 
 run: all
 	bash run.sh
@@ -15,3 +15,4 @@ run: all
 clean:
 	rm -f routing_server
 	rm -f node
+	rm -f protocol
