@@ -1,6 +1,10 @@
 #include "protocol.h"
 #include <string.h>
 
+char *RESPONSE_SUCCESS = "Thank you for connecting!\n";
+char *RESPONSE_FULL = "Client list is full :(\n";
+char *ALL_CLIENTS_CONNECTED = "All clients connected! Server disconnecting in 3... 2... 1...\n";
+
 void construct_header(char *buffer, struct node node_to_send) {
     memcpy(&(buffer[0]), &(node_to_send.own_address), sizeof(int));
     memcpy(&(buffer[4]), &(node_to_send.number_of_edges), sizeof(int));
