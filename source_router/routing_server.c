@@ -4,6 +4,7 @@
 int BASEPORT;
 int BACKLOG_SIZE = 10;
 int MAX_NUM_CLIENTS;
+int max_num_edges;
 
 struct client *clients;
 
@@ -14,7 +15,10 @@ struct client {
 };
 
 struct node *nodes;
+struct edge *edges;
+
 int number_of_nodes;
+int number_of_edges;
 
 void remove_client(int fd) {
     int i;
@@ -280,7 +284,6 @@ void run_server(int socket_listener) {
             //exit?
         }
     }
-    send_all_clients_added();
 }
 
 void print_node(struct node node) {
@@ -289,6 +292,53 @@ void print_node(struct node node) {
     printf("Edges:\n");
     for (int i = 0; i < node.number_of_edges; i++) {
         printf("To: %d\nFrom: %d\nWeight: %d\n", node.edges[i].to_address, node.edges[i].from_address, node.edges[i].weight);
+    }
+}
+
+void print_edge(struct edge edge) {
+    printf("To: %d\nFrom: %d\nWeight: %d\n", edge.to_address, edge.from_address, edge.weight);
+}
+
+int count_number_same_edge(struct edge edge) {
+    int counter = 0;
+
+    for (int i = 0; i < number_of_edges; i++) {
+        struct edge current = edges[i];
+        if (current.to_address == edge.from_address) {
+            if (current.from_address == edge.to_address) {
+                if (current.weight == edge.weight) {
+                    counter += 1;
+                }
+            }
+        }
+    }
+    return counter;
+}
+
+void check_two_way_edges() {
+    printf("Checking two way edges\n");
+    int count = 0;
+
+    for (int i = 0; i < number_of_edges; i++) {
+        count = count_number_same_edge(edges[i]);
+        if (count < 1) {
+            printf("Too few of this edge!\n");
+            printf("To: %d\nFrom: %d\nWeight: %d\n", edges[i].to_address, edges[i].from_address, edges[i].weight);
+            //delete edge all together
+        }
+    }
+}
+
+void add_all_edges_to_array() {
+    int offset_in_array = 0;
+
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        struct edge *edges_temp = nodes[i].edges;
+        for (int j = 0; j < nodes[i].number_of_edges; j++) {
+            edges[offset_in_array] = edges_temp[j];
+            offset_in_array ++;
+            number_of_edges++;
+        }
     }
 }
 
@@ -306,12 +356,21 @@ int main(int argc, char *argv[]) {
     struct node nodes_temp[MAX_NUM_CLIENTS];
     nodes = nodes_temp;
     number_of_nodes = 0;
+    number_of_edges = 0;
 
+    max_num_edges = MAX_NUM_CLIENTS * MAX_NUM_CLIENTS;
+    struct edge edges_temp[max_num_edges];
+    edges = edges_temp;
     run_server(server_socket);
+    send_all_clients_added();
+    add_all_edges_to_array();
 
-    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
-        struct node node = nodes[i];
-        print_node(node);
-    }
+    check_two_way_edges();
+
+
+    // for (int i = 0; i < MAX_NUM_CLIENTS; i++) { //could be empty spots?
+    //     struct node node = nodes[i];
+    //     print_node(node);
+    // }
     return 0;
 }
