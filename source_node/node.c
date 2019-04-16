@@ -4,6 +4,7 @@
 int baseport = 0;
 
 struct node *node;
+struct edge *edges;
 
 int create_and_connect_socket() {
     struct sockaddr_in server_addr;
@@ -30,7 +31,7 @@ int create_and_connect_socket() {
 int hand_shake(int client_socket) {
     char buf[strlen(RESPONSE_SUCCESS)];
 
-    ssize_t bytes = receive_message(client_socket, buf, strlen(RESPONSE_SUCCESS)); //could be response_failure
+    size_t bytes = receive_message(client_socket, buf, strlen(RESPONSE_SUCCESS)); //could be response_failure
     if (bytes == -1) {
         printf("Something wrong with receive message\n");
         return EXIT_FAILURE;
@@ -45,42 +46,55 @@ int hand_shake(int client_socket) {
     return EXIT_SUCCESS;
 }
 
-ssize_t send_information(int client_socket) {
-    ssize_t bytes;
-    char send_text[255];
+void deconstruct_message(char *message) { //just for testing
+    int own_address = 0;
+    int number_of_edges = 0;
+    struct edge edge;
 
-    fgets(send_text, 255, stdin); //For morroskyld
-    ssize_t number_of_bytes = strlen(send_text);
+    memcpy(&own_address, &(message[0]), sizeof(int));
+    memcpy(&(number_of_edges), &(message[4]), sizeof(int));
+    memcpy(&(edge), &(message[8]), sizeof(struct edge));
 
-    bytes = send_message(client_socket, &number_of_bytes, sizeof(int));
-    if (bytes == -1) {
-        printf("Error with send_message\n");
-        return EXIT_FAILURE;
-    }
-    if (bytes == 0) {
-        printf("Disconnection\n");
-        return EXIT_FAILURE;
-    }
+    printf("Own address: %d\nNumber of edges: %d\nTo: %d\nFrom: %d\nWeight: %d\n\n", own_address, number_of_edges, edge.to_address, edge.from_address, edge.weight);
+}
 
-    bytes = send_message(client_socket, send_text, number_of_bytes);
-    if (bytes == -1) {
-        printf("Error with send_message\n");
-        return EXIT_FAILURE;
+void construct_message(char *buffer_to_send) {
+    construct_header(buffer_to_send, *node);
+
+    int start_of_edges_in_buffer = sizeof(int) * 2;
+
+    int edge_counter = 0;
+    int place_edge_in_buffer = start_of_edges_in_buffer;
+
+    while (edge_counter < node->number_of_edges) {
+        memcpy(&(buffer_to_send[place_edge_in_buffer]), &(node->edges[edge_counter]), sizeof(int) * 3);
+        edge_counter++;
+        place_edge_in_buffer += sizeof(struct edge);
     }
-    if (bytes == 0) {
-        printf("Disconnection\n");
-        return EXIT_FAILURE;
-    }
+}
+
+size_t send_information(int client_socket) {
+    size_t bytes = 0;
+
+    char *buffer_to_send = malloc((sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges));
+    assert(buffer_to_send);
+
+    construct_message(buffer_to_send);
+    
+    size_t size_of_message = (sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges);
+    //bytes = send(client_socket, buffer_to_send, size_of_message, 0);
+
+    bytes = send_message(client_socket, &size_of_message, sizeof(int));
+    bytes = send_message(client_socket, buffer_to_send, size_of_message);
     return bytes;
 }
 
-int send_and_receive(int client_socket) {
-    ssize_t bytes;
-
-    bytes = send_information(client_socket);
+size_t receive_all_nodes_connected(int client_socket) {
+    size_t bytes = 0;
 
     char buffer[strlen(ALL_CLIENTS_CONNECTED)];
-    bytes = recv(client_socket, buffer, strlen(ALL_CLIENTS_CONNECTED), 0);
+    bytes = receive_message(client_socket, buffer, strlen(ALL_CLIENTS_CONNECTED));
+
     if (bytes == -1) {
         return EXIT_FAILURE;
     }
@@ -121,25 +135,31 @@ struct edge create_edge(char *info, int size_of_info) {
 
 void create_node_struct(char *own_address, char *info_edges[], int client_socket, int number_of_edges) {
     node = malloc(sizeof(struct node));
+    edges = calloc(number_of_edges, sizeof(struct edge));
+    printf("Create_node_struct\n");
+
     if (node == NULL) {
         perror("malloc");
         exit(EXIT_FAILURE);
     }
-
+    
     node->client_socket = client_socket;
     node->own_address = atoi(own_address);
+    node->edges = edges;
+    node->number_of_edges = number_of_edges;
 
-    for (int i = 3; i < number_of_edges; i++) {
+    for (int i = 0; i < number_of_edges; i++) {
         struct edge new_edge = create_edge(info_edges[i], strlen(info_edges[i]));
         new_edge.from_address = node->own_address;
+        edges[i] = new_edge;
     }
 }
 
 int main(int argc, char *argv[]) {
-    // if (argc <= 2) {
-    //     printf("Number of arguments are too few!\n");
-    //     exit(EXIT_FAILURE);
-    // }
+    if (argc <= 2) {
+        printf("Number of arguments are too few!\n");
+        exit(EXIT_FAILURE);
+    }
 
     baseport = atoi(argv[1]);
     int client_socket = create_and_connect_socket();
@@ -148,10 +168,21 @@ int main(int argc, char *argv[]) {
     }
 
     hand_shake(client_socket);
+    printf("Here\n");
 
+    int number_of_edges_argc = argc-3;
 
-    //create_node_struct(argv[2], argv, client_socket, argc-2);
-    send_and_receive(client_socket);
+    printf("Number of edges: %d\n", number_of_edges_argc);
+    create_node_struct(argv[2], &(argv[3]), client_socket, number_of_edges_argc);
+    
+    //send_and_receive(client_socket);
+    
+    printf("%d\n", node->number_of_edges);
+    for (int i = 0; i < node->number_of_edges; i++) {
+        printf("to address: %d\nweight: %d\n", node->edges[i].to_address, node->edges[i].weight);
+    }
 
+    send_information(client_socket);
+    receive_all_nodes_connected(client_socket);
     return EXIT_SUCCESS; 
 } 
