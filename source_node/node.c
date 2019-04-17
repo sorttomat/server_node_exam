@@ -103,6 +103,12 @@ size_t receive_all_nodes_connected(int client_socket) {
     char *buffer;
     
     buffer = malloc(strlen(ALL_CLIENTS_CONNECTED) * sizeof(char));
+
+    if (buffer == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+    
     bytes = receive_message(client_socket, buffer, strlen(ALL_CLIENTS_CONNECTED));
 
     if (bytes == -1) {
