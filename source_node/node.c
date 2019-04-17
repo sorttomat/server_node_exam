@@ -83,8 +83,9 @@ size_t send_information(int client_socket) {
     
     size_t size_of_message = (sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges);
 
-    //bytes = send_message(client_socket, &size_of_message, sizeof(int));
     bytes = send_message(client_socket, buffer_to_send, size_of_message);
+
+    free(buffer_to_send);
     return bytes;
 }
 
@@ -135,13 +136,16 @@ struct edge create_edge(char *info, int size_of_info) {
 void create_node_struct(int own_address, char *info_edges[], int client_socket, int number_of_edges) {
 
     node = malloc(sizeof(struct node));
-    edges = calloc(number_of_edges, sizeof(struct edge));
-
     if (node == NULL) {
         perror("malloc");
         exit(EXIT_FAILURE);
     }
-    
+    edges = calloc(number_of_edges, sizeof(struct edge));
+    if (edges == NULL) {
+        perror("calloc");
+        exit(EXIT_FAILURE);
+    }
+
     node->client_socket = client_socket;
     node->own_address = own_address;
     node->edges = edges;
@@ -152,6 +156,11 @@ void create_node_struct(int own_address, char *info_edges[], int client_socket, 
         new_edge.from_address = node->own_address;
         edges[i] = new_edge;
     }
+}
+
+void free_all() {
+    free(edges);
+    free(node);
 }
 
 int main(int argc, char *argv[]) {
@@ -176,5 +185,7 @@ int main(int argc, char *argv[]) {
 
     send_information(client_socket);
     receive_all_nodes_connected(client_socket);
+
+
     return EXIT_SUCCESS; 
 } 
