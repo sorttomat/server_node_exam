@@ -9,9 +9,13 @@ int max_num_edges;
 struct client *clients;
 
 struct client {
-    int fd;
+    int client_socket;
     char *ip;
     unsigned short port;
+
+    int own_address;
+    int number_of_edges;
+    struct edge *edges;
 };
 
 struct node *nodes;
@@ -20,15 +24,15 @@ struct edge *edges;
 int number_of_nodes;
 int number_of_edges;
 
-void print_node(struct node node);
+void print_client(struct client client);
 void print_edge(struct edge edge);
 
-void remove_client(int fd) {
+void remove_client(int client_socket) {
     int i;
 
     for (i = 0; i < MAX_NUM_CLIENTS; ++i) {
-        if (clients[i].fd == fd) {
-            clients[i].fd = -1;
+        if (clients[i].client_socket == client_socket) {
+            clients[i].client_socket = -1;
             free(clients[i].ip);
             return;
         }
@@ -78,8 +82,8 @@ int add_client(int socket, struct sockaddr_in *client_addr, socklen_t addrlen) {
 
     for (i = 0; i < MAX_NUM_CLIENTS; ++i) {
         /* We have capacity to handle this client*/
-        if (clients[i].fd == -1) {
-            clients[i].fd = socket;
+        if (clients[i].client_socket == -1) {
+            clients[i].client_socket = socket;
             clients[i].ip = ip_buffer;
             clients[i].port = ntohs(client_addr->sin_port);
 
@@ -112,27 +116,40 @@ int accept_new_client(int socket_listener) {
     }
     return client_socket;
 }
-void deconstruct_message(char *received_information, struct node *node) {
-    deconstruct_header(received_information, node);
-    int start_of_edges_in_buffer = sizeof(int) * 2;
+void deconstruct_message(char *received_information, struct client *client) {
 
-    int edge_counter = 0;
-    int place_edge_in_buffer = start_of_edges_in_buffer;
+    struct edge *edges = calloc(client->number_of_edges, sizeof(struct edge));
 
-    struct edge *edges = calloc(node->number_of_edges, sizeof(struct edge));
+    struct edge *edges_temp = (struct edge*) received_information;
 
-    struct edge *edges_temp = (struct edge*) (received_information + place_edge_in_buffer);
+    memcpy(edges, edges_temp, (client->number_of_edges) * sizeof(struct edge));
 
-    memcpy(edges, edges_temp, (node->number_of_edges) * sizeof(struct edge));
-
-    node->edges = edges;
+    client->edges = edges;
 }
 
-size_t receive_information_fill_node(int client_socket, struct node *node) {
+struct client* find_client_in_array(int client_socket) {
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        struct client *current = &(clients[i]);
+        if (current->client_socket == client_socket) {
+            return current;
+        }
+    }
+    return NULL;
+}
+
+size_t receive_information_fill_node(int client_socket) {
     size_t bytes = 0;
 
-    size_t size_of_message = 0;
-    bytes = receive_message(client_socket, &size_of_message, sizeof(int));
+    int own_address = 0;
+    bytes = receive_message(client_socket, &own_address, sizeof(int));
+    
+    int number_of_edges = 0;
+    bytes = receive_message(client_socket, &number_of_edges, sizeof(int));
+
+    size_t size_of_edges = number_of_edges * sizeof(struct edge);
+
+    char information[size_of_edges];
+    bytes = receive_message(client_socket, information, size_of_edges);
 
     if (bytes == -1) {
         printf("Something wrong with receive_information_fill_node\n");
@@ -143,29 +160,19 @@ size_t receive_information_fill_node(int client_socket, struct node *node) {
         return 0;
     }
 
-    char information[size_of_message];
-    bytes = receive_message(client_socket, information, size_of_message);
+    struct client *correct_client = find_client_in_array(client_socket);
 
-    if (bytes == -1) {
-        printf("Something wrong with receive_information_fill_node\n");
-        return -1;
-    }
-    if (bytes ==  0) {
-        printf("Disconnection\n");
-        return 0;
-    }
-
-    deconstruct_message(information, node);
-    node->client_socket = client_socket;
+    correct_client->own_address = own_address;
+    correct_client->number_of_edges = number_of_edges;
+    deconstruct_message(information, correct_client);
 
     return bytes;
 }
 
 int receive_from_client(int client_socket) {
     size_t bytes;
-    struct node node;
 
-    bytes = receive_information_fill_node(client_socket, &node);
+    bytes = receive_information_fill_node(client_socket);
 
     if (bytes == -1) {
         printf("Something wrong with receive_information_from_client\n");
@@ -177,8 +184,6 @@ int receive_from_client(int client_socket) {
     }
 
     printf("Number of bytes: %zu\nFrom socket: %d\n", bytes, client_socket);
-
-    nodes[number_of_nodes] = node;
 
     return 1;
 }
@@ -239,7 +244,7 @@ size_t send_all_clients_added() {
 
     for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
         struct client current = clients[j];
-        bytes = send_message(current.fd, ALL_CLIENTS_CONNECTED, strlen(ALL_CLIENTS_CONNECTED));
+        bytes = send_message(current.client_socket, ALL_CLIENTS_CONNECTED, strlen(ALL_CLIENTS_CONNECTED));
         if (bytes == -1) {
             printf("Something wrong with receive_information_from_client\n");
             return -1;
@@ -261,7 +266,7 @@ void run_server(int socket_listener) {
     FD_SET(socket_listener, &fds);
 
     for (int i = 0; i < MAX_NUM_CLIENTS; ++i) {
-        clients[i].fd = -1;
+        clients[i].client_socket = -1;
     }
 
     int ret = 0;
@@ -316,8 +321,8 @@ void add_all_edges_to_array() {
     int offset_in_array = 0;
 
     for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
-        struct edge *edges_temp = nodes[i].edges;
-        for (int j = 0; j < nodes[i].number_of_edges; j++) {
+        struct edge *edges_temp = clients[i].edges;
+        for (int j = 0; j < clients[i].number_of_edges; j++) {
             edges[offset_in_array] = edges_temp[j];
             offset_in_array ++;
             number_of_edges++;
@@ -325,12 +330,12 @@ void add_all_edges_to_array() {
     }
 }
 
-void print_node(struct node node) {
-    printf("Own address: %d\t", node.own_address);
-    printf("Number of edges: %d\n", node.number_of_edges);
+void print_client(struct client client) {
+    printf("Own address: %d\t", client.own_address);
+    printf("Number of edges: %d\n", client.number_of_edges);
     printf("Edges:\n");
-    for (int i = 0; i < node.number_of_edges; i++) {
-        printf("\tTo: %d\tFrom: %d\tWeight: %d\n", node.edges[i].to_address, node.edges[i].from_address, node.edges[i].weight);
+    for (int i = 0; i < client.number_of_edges; i++) {
+        printf("\tTo: %d\tFrom: %d\tWeight: %d\n", client.edges[i].to_address, client.edges[i].from_address, client.edges[i].weight);
     }
     printf("\n");
 }
@@ -350,14 +355,12 @@ int main(int argc, char *argv[]) {
     struct client clients_temp[MAX_NUM_CLIENTS];
     clients = clients_temp;
 
-    struct node nodes_temp[MAX_NUM_CLIENTS];
-    nodes = nodes_temp;
-    number_of_nodes = 0;
     number_of_edges = 0;
 
     max_num_edges = MAX_NUM_CLIENTS * MAX_NUM_CLIENTS;
     struct edge edges_temp[max_num_edges];
     edges = edges_temp;
+
     run_server(server_socket);
     send_all_clients_added();
     add_all_edges_to_array();
@@ -366,8 +369,8 @@ int main(int argc, char *argv[]) {
 
 
     for (int i = 0; i < MAX_NUM_CLIENTS; i++) { //could be empty spots?
-        struct node node = nodes[i];
-        print_node(node);
+        struct client client = clients[i];
+        print_client(client);
     }
     return 0;
 }

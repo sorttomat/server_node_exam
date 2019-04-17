@@ -82,9 +82,8 @@ size_t send_information(int client_socket) {
     construct_message(buffer_to_send);
     
     size_t size_of_message = (sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges);
-    //bytes = send(client_socket, buffer_to_send, size_of_message, 0);
 
-    bytes = send_message(client_socket, &size_of_message, sizeof(int));
+    //bytes = send_message(client_socket, &size_of_message, sizeof(int));
     bytes = send_message(client_socket, buffer_to_send, size_of_message);
     return bytes;
 }
@@ -133,11 +132,10 @@ struct edge create_edge(char *info, int size_of_info) {
     return new_edge;
 }
 
-void create_node_struct(char *own_address, char *info_edges[], int client_socket, int number_of_edges) {
-    printf("info_edges[0] %s\n", info_edges[0]);
+void create_node_struct(int own_address, char *info_edges[], int client_socket, int number_of_edges) {
+
     node = malloc(sizeof(struct node));
     edges = calloc(number_of_edges, sizeof(struct edge));
-    printf("Create_node_struct\n");
 
     if (node == NULL) {
         perror("malloc");
@@ -145,7 +143,7 @@ void create_node_struct(char *own_address, char *info_edges[], int client_socket
     }
     
     node->client_socket = client_socket;
-    node->own_address = atoi(own_address);
+    node->own_address = own_address;
     node->edges = edges;
     node->number_of_edges = number_of_edges;
 
@@ -169,24 +167,12 @@ int main(int argc, char *argv[]) {
     }
 
     hand_shake(client_socket);
-    printf("Here\n");
 
-    int number_of_edges_argc = argc-3;
-
-    // char **edges_info = &(argv[3]);
+    int number_of_edges = argc-3;
     char **edges_info = argv + 3;
+    int own_address = atoi(argv[2]);
 
-
-    printf("argv[3] %s\n", argv[3]);
-
-    create_node_struct(argv[2], edges_info, client_socket, number_of_edges_argc);
-    
-    //send_and_receive(client_socket);
-    
-    printf("%d\n", node->number_of_edges);
-    for (int i = 0; i < node->number_of_edges; i++) {
-        printf("to address: %d\nweight: %d\n", node->edges[i].to_address, node->edges[i].weight);
-    }
+    create_node_struct(own_address, edges_info, client_socket, number_of_edges);
 
     send_information(client_socket);
     receive_all_nodes_connected(client_socket);

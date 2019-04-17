@@ -10,10 +10,10 @@ void construct_header(char *buffer, struct node node_to_send) {
     memcpy(&(buffer[4]), &(node_to_send.number_of_edges), sizeof(int));
 }
 
-void deconstruct_header(char *buffer, struct node *node_to_receive) {
-    memcpy(&(node_to_receive->own_address), &(buffer[0]), sizeof(int));
-    memcpy(&(node_to_receive->number_of_edges), &(buffer[4]), sizeof(int));
-}
+// void deconstruct_header(char *buffer, struct node *node_to_receive) {
+//     memcpy(&(node_to_receive->own_address), &(buffer[0]), sizeof(int));
+//     memcpy(&(node_to_receive->number_of_edges), &(buffer[4]), sizeof(int));
+// }
 
 int receive_message(int client_socket, void *buf, size_t total_bytes_to_receive) {
     char *char_buf;
