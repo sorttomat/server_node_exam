@@ -84,6 +84,15 @@ size_t send_information(int client_socket) {
     size_t size_of_message = (sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges);
 
     bytes = send_message(client_socket, buffer_to_send, size_of_message);
+    if (bytes == -1) {
+        free(buffer_to_send);
+        return EXIT_FAILURE;
+    }
+    if (bytes == 0) {
+        printf("Server has disconnected\n");
+        free(buffer_to_send);
+        return EXIT_SUCCESS; //?
+    }
 
     free(buffer_to_send);
     return bytes;
@@ -92,19 +101,22 @@ size_t send_information(int client_socket) {
 size_t receive_all_nodes_connected(int client_socket) {
     size_t bytes = 0;
 
-    char buffer[strlen(ALL_CLIENTS_CONNECTED)];
+    char *buffer = malloc(strlen(ALL_CLIENTS_CONNECTED));
     bytes = receive_message(client_socket, buffer, strlen(ALL_CLIENTS_CONNECTED));
 
     if (bytes == -1) {
+        free(buffer);
         return EXIT_FAILURE;
     }
     if (bytes == 0) {
         printf("Server has disconnected\n");
+        free(buffer);
         return EXIT_SUCCESS; //?
     }
 
     printf("%s\n", buffer);
 
+    free(buffer);
     close(client_socket);
     return EXIT_SUCCESS;
 }
