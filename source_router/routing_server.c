@@ -28,19 +28,20 @@ void print_client(struct client client);
 void print_edge(struct edge edge);
 
 void remove_client(int client_socket) {
-    int i;
-
-    for (i = 0; i < MAX_NUM_CLIENTS; ++i) {
+    for (int i = 0; i < MAX_NUM_CLIENTS; ++i) {
         if (clients[i].client_socket == client_socket) {
             clients[i].client_socket = -1;
             free(clients[i].ip);
+            free(clients[i].edges);
             return;
         }
     }
 }
 
 int create_server_socket() {
-    int ret, yes, server_socket = 1;
+    int ret = 0;
+    int yes = 0;
+    int server_socket = 1;
     struct sockaddr_in server_addr;
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -371,6 +372,11 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < MAX_NUM_CLIENTS; i++) { //could be empty spots?
         struct client client = clients[i];
         print_client(client);
+        
+    }
+
+    for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
+        remove_client(clients[j].client_socket);
     }
     return 0;
 }
