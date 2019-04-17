@@ -186,6 +186,6 @@ int main(int argc, char *argv[]) {
     send_information(client_socket);
     receive_all_nodes_connected(client_socket);
 
-
+    free_all();
     return EXIT_SUCCESS; 
 } 
