@@ -67,7 +67,7 @@ void construct_message(char *buffer_to_send) {
     int place_edge_in_buffer = start_of_edges_in_buffer;
 
     while (edge_counter < node->number_of_edges) {
-        memcpy(&(buffer_to_send[place_edge_in_buffer]), &(node->edges[edge_counter]), sizeof(int) * 3);
+        memcpy(&(buffer_to_send[place_edge_in_buffer]), &(node->edges[edge_counter]), sizeof(struct edge));
         edge_counter++;
         place_edge_in_buffer += sizeof(struct edge);
     }
@@ -134,6 +134,7 @@ struct edge create_edge(char *info, int size_of_info) {
 }
 
 void create_node_struct(char *own_address, char *info_edges[], int client_socket, int number_of_edges) {
+    printf("info_edges[0] %s\n", info_edges[0]);
     node = malloc(sizeof(struct node));
     edges = calloc(number_of_edges, sizeof(struct edge));
     printf("Create_node_struct\n");
@@ -172,8 +173,13 @@ int main(int argc, char *argv[]) {
 
     int number_of_edges_argc = argc-3;
 
-    printf("Number of edges: %d\n", number_of_edges_argc);
-    create_node_struct(argv[2], &(argv[3]), client_socket, number_of_edges_argc);
+    // char **edges_info = &(argv[3]);
+    char **edges_info = argv + 3;
+
+
+    printf("argv[3] %s\n", argv[3]);
+
+    create_node_struct(argv[2], edges_info, client_socket, number_of_edges_argc);
     
     //send_and_receive(client_socket);
     

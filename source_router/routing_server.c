@@ -20,6 +20,9 @@ struct edge *edges;
 int number_of_nodes;
 int number_of_edges;
 
+void print_node(struct node node);
+void print_edge(struct edge edge);
+
 void remove_client(int fd) {
     int i;
 
@@ -118,15 +121,9 @@ void deconstruct_message(char *received_information, struct node *node) {
 
     struct edge *edges = calloc(node->number_of_edges, sizeof(struct edge));
 
-    while (edge_counter < node->number_of_edges) {
-        memcpy(&(edges[edge_counter].from_address), &(received_information[place_edge_in_buffer]), sizeof(int));
-        place_edge_in_buffer += sizeof(int);
-        memcpy(&(edges[edge_counter].to_address), &(received_information[place_edge_in_buffer]), sizeof(int));
-        place_edge_in_buffer += sizeof(int);
-        memcpy(&(edges[edge_counter].weight), &(received_information[place_edge_in_buffer]), sizeof(int));
-        place_edge_in_buffer += sizeof(int);
-        edge_counter++;
-    }
+    struct edge *edges_temp = (struct edge*) (received_information + place_edge_in_buffer);
+
+    memcpy(edges, edges_temp, (node->number_of_edges) * sizeof(struct edge));
 
     node->edges = edges;
 }
@@ -208,7 +205,6 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
             } 
             else {
                 /* Receive from existing client */
-                
                 int ret = receive_from_client(i);
 
                 if (ret == -1) {
@@ -286,19 +282,6 @@ void run_server(int socket_listener) {
     }
 }
 
-void print_node(struct node node) {
-    printf("Own address: %d\n", node.own_address);
-    printf("Number of edges: %d\n", node.number_of_edges);
-    printf("Edges:\n");
-    for (int i = 0; i < node.number_of_edges; i++) {
-        printf("To: %d\nFrom: %d\nWeight: %d\n", node.edges[i].to_address, node.edges[i].from_address, node.edges[i].weight);
-    }
-}
-
-void print_edge(struct edge edge) {
-    printf("To: %d\nFrom: %d\nWeight: %d\n", edge.to_address, edge.from_address, edge.weight);
-}
-
 int count_number_same_edge(struct edge edge) {
     int counter = 0;
 
@@ -323,7 +306,7 @@ void check_two_way_edges() {
         count = count_number_same_edge(edges[i]);
         if (count < 1) {
             printf("Too few of this edge!\n");
-            printf("To: %d\nFrom: %d\nWeight: %d\n", edges[i].to_address, edges[i].from_address, edges[i].weight);
+            print_edge(edges[i]);
             //delete edge all together
         }
     }
@@ -340,6 +323,20 @@ void add_all_edges_to_array() {
             number_of_edges++;
         }
     }
+}
+
+void print_node(struct node node) {
+    printf("Own address: %d\t", node.own_address);
+    printf("Number of edges: %d\n", node.number_of_edges);
+    printf("Edges:\n");
+    for (int i = 0; i < node.number_of_edges; i++) {
+        printf("\tTo: %d\tFrom: %d\tWeight: %d\n", node.edges[i].to_address, node.edges[i].from_address, node.edges[i].weight);
+    }
+    printf("\n");
+}
+
+void print_edge(struct edge edge) {
+    printf("To: %d\tFrom: %d\tWeight: %d\n", edge.to_address, edge.from_address, edge.weight);
 }
 
 int main(int argc, char *argv[]) {
@@ -368,9 +365,9 @@ int main(int argc, char *argv[]) {
     check_two_way_edges();
 
 
-    // for (int i = 0; i < MAX_NUM_CLIENTS; i++) { //could be empty spots?
-    //     struct node node = nodes[i];
-    //     print_node(node);
-    // }
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) { //could be empty spots?
+        struct node node = nodes[i];
+        print_node(node);
+    }
     return 0;
 }
