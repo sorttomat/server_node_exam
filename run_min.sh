@@ -14,6 +14,7 @@ if [ $1 -lt $MIN_PORT ] || [ $1 -gt $MAX_PORT ]; then
 fi
 
 BASE_PORT=$1
+./routing_server $BASE_PORT 8          &
 
 # Run all nodes
 ./node $BASE_PORT 1 11:2 103:6         &
