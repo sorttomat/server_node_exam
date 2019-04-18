@@ -38,7 +38,6 @@ char *ALL_CLIENTS_CONNECTED;
 
 
 void construct_header(char *buffer, struct node node_to_send);
-//void deconstruct_header(char *buffer, struct node *node_to_receive);
 int receive_message(int client_socket, void *buf, size_t total_bytes_to_receive);
 int send_message(int client_socket, void *buf, size_t total_bytes_to_send);
 

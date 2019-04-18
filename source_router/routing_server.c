@@ -1,5 +1,6 @@
 
 #include "../source_shared/protocol.h"
+#include "routing_server.h"
 
 int BASEPORT;
 int BACKLOG_SIZE = 10;
@@ -7,17 +8,6 @@ int MAX_NUM_CLIENTS;
 int max_num_edges;
 
 struct client *clients;
-
-struct client {
-    int client_socket;
-    char *ip;
-    unsigned short port;
-
-    int own_address;
-    int number_of_edges;
-    struct edge *edges;
-};
-
 struct node *nodes;
 struct edge *edges;
 
@@ -345,6 +335,198 @@ void print_edge(struct edge edge) {
     printf("To: %d\tFrom: %d\tWeight: %d\n", edge.to_address, edge.from_address, edge.weight);
 }
 
+/*
+Dijkstra:
+*/
+
+struct client *find_and_remove_client(int own_address, struct client *clients, int *number_of_clients_in_array) {
+    struct client *client_to_remove = malloc(sizeof(struct client)); //TODO: is this scary
+
+    for (int i = 0; i < *number_of_clients_in_array; i++) {
+        struct client current = clients[i];
+        if (current.own_address == own_address) {
+
+            memcpy(client_to_remove, &current, sizeof(struct client));
+            int last_index_in_array = (*number_of_clients_in_array) -1;
+
+            clients[i] = clients[last_index_in_array];
+
+            (*number_of_clients_in_array)--;
+            return client_to_remove;
+        }
+    }
+    free(client_to_remove);
+    return NULL;
+} 
+
+void fill_table(struct table table[], struct client clients[], int number_of_clients) {
+    for (int i = 0; i < number_of_clients; i++) {
+        table[i].to_address = clients[i].own_address;
+        table[i].weight = -1;
+    }
+}
+
+void update_shortest_distance(struct table table[], int new_distance, int current_first_step) {
+    if (table->weight > new_distance || table->weight == -1) {
+        table->weight = new_distance;
+        table->first_client_on_route = current_first_step;
+    }
+}
+
+struct table *find_table_entry(int address, struct table calculated_table[], int number_of_entries) {
+    for (int i = 0; i < number_of_entries; i++) {
+        struct table *current = &(calculated_table[i]);
+        if (current->to_address == address) {
+            return current;
+        }
+    }
+    return NULL;
+}
+
+int is_unvisited(int address, struct client unvisited[], int number_of_unvisited) {
+    int yes = 1;
+    int no = 0;
+    for (int i = 0; i < number_of_unvisited; i++) {
+        if (unvisited[i].own_address == address) {
+            return yes;
+        }
+    }
+    return no;
+}
+
+void update_shortest_distance_from(struct client client, struct client unvisited[], int number_of_unvisited, int number_of_clients, struct table calculated_table[], int current_first_step) {
+    int current_distance = find_table_entry(client.own_address, calculated_table, number_of_clients)->weight;
+
+    for (int i = 0; i < client.number_of_edges; i++) {
+        struct edge current_edge = client.edges[i];
+
+        int address = current_edge.to_address;
+
+        if (is_unvisited(address, unvisited, number_of_unvisited) == 1) {
+            struct table *table_entry = find_table_entry(address, calculated_table, number_of_clients);
+
+            int new_distance = current_distance + current_edge.weight;
+            update_shortest_distance(table_entry, new_distance, current_first_step);
+        }
+    }
+}
+
+void set_self_shortest_distance(int own_address, struct table calculated_table[], int number_of_entries) {
+    for (int i = 0; i < number_of_entries; i++) {
+        if (calculated_table[i].to_address == own_address) {
+            calculated_table[i].first_client_on_route = own_address;
+            calculated_table[i].weight = 0;
+            return;
+        }
+    }
+}
+
+void print_table(struct table table[], int number_of_entries) {
+    for (int i = 0; i < number_of_entries; i++) {
+        struct table current = table[i];
+        printf("To: %d\tFirst step: %d\tWeight: %d\n", current.to_address, current.first_client_on_route, current.weight);
+    }
+}
+
+void set_table(struct table calculated_table[], struct client unvisited[], int number_of_clients, int own_address) {
+    fill_table(calculated_table, unvisited, number_of_clients);
+    set_self_shortest_distance(own_address, calculated_table, number_of_clients); //these two could be merged
+}
+
+int find_smallest_weight_edge(struct client client, struct client unvisited[], int number_of_unvisited, int *address_of_client_to_visit) {
+    struct edge *edges = client.edges;
+    if (client.number_of_edges == 0) {
+        return -1;
+    }
+
+    int smallest = 1000;
+
+    for (int i = 0; i < client.number_of_edges; i++) {
+        if (edges[i].weight < smallest && is_unvisited(edges[i].to_address, unvisited, number_of_unvisited)) {
+            smallest = edges[i].weight;
+            *address_of_client_to_visit = edges[i].to_address;
+
+        }
+    }
+    return smallest;
+}
+
+int address_of_client_to_visit(struct client visited[], int number_of_visited, struct client unvisited[], int number_of_unvisited, int *current_first_step, int starting_address) {
+    int address_of_client_to_visit = -1;
+    int temp_address_of_client_to_visit = -1;
+
+    int smallest_weight_edge = 1000;
+
+    int keep_current_first_step = 1;
+    int could_be_new_first_step = *current_first_step;
+
+    for (int i = 0; i < number_of_visited; i++) {
+        struct client temp = visited[i];
+        int smallest = find_smallest_weight_edge(temp, unvisited, number_of_unvisited, &temp_address_of_client_to_visit);
+        if (smallest != -1 && smallest < smallest_weight_edge) {
+            smallest_weight_edge = smallest;
+            address_of_client_to_visit = temp_address_of_client_to_visit;
+
+            if (temp.own_address == starting_address) {
+                could_be_new_first_step = address_of_client_to_visit;
+                keep_current_first_step = 0;
+            }
+            else {
+                keep_current_first_step = 1;
+            }
+        }
+    }
+
+    if (keep_current_first_step == 0) {
+        *current_first_step = could_be_new_first_step;
+    }
+
+    return address_of_client_to_visit;
+}
+
+void dijkstra_from_client(int own_address, struct client clients[], int number_of_clients) { //is going to return struct table *
+    struct client *unvisited;
+    unvisited = calloc(number_of_clients, sizeof(struct client));
+    memcpy(unvisited, clients, number_of_clients * sizeof(struct client));
+
+    struct client visited[number_of_clients];
+
+    int current_first_step = own_address;
+
+    struct table *calculated_table;
+    calculated_table = calloc(number_of_clients, sizeof(struct table));
+
+    set_table(calculated_table, unvisited, number_of_clients, own_address);
+
+    int number_of_unvisited_clients = number_of_clients;
+    int number_of_visited_clients = 0;
+
+    struct client *client_to_calculate = find_and_remove_client(own_address, unvisited, &number_of_unvisited_clients); //this one is malloced
+
+
+    visited[number_of_visited_clients] = *client_to_calculate; 
+    number_of_visited_clients++;
+
+    update_shortest_distance_from(*client_to_calculate, unvisited, number_of_unvisited_clients, number_of_clients, calculated_table, current_first_step);
+
+    int next_address = 0;
+    struct client *next_client;
+    while (number_of_unvisited_clients > 0) {
+        next_address = address_of_client_to_visit(visited, number_of_visited_clients, unvisited, number_of_unvisited_clients, &current_first_step, own_address);
+
+        next_client = find_and_remove_client(next_address, unvisited, &number_of_unvisited_clients); //this one is malloced
+        visited[number_of_visited_clients] = *next_client;
+        number_of_visited_clients++;
+        update_shortest_distance_from(*next_client, unvisited, number_of_unvisited_clients, number_of_clients, calculated_table, current_first_step);
+    }
+    print_table(calculated_table, number_of_clients);
+
+    //TODO: go through visited and free? Should visited be array of pointers?
+}
+
+/*
+*/
+
 int main(int argc, char *argv[]) {
     assert(argc == 3);
 
@@ -369,10 +551,19 @@ int main(int argc, char *argv[]) {
     check_two_way_edges();
 
 
-    for (int i = 0; i < MAX_NUM_CLIENTS; i++) { //could be empty spots?
-        struct client client = clients[i];
-        print_client(client);
+    // for (int i = 0; i < MAX_NUM_CLIENTS; i++) { //could be empty spots?
+    //     struct client client = clients[i];
+    //     print_client(client);
         
+    // }
+
+    struct client temp;
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        temp = clients[i];
+        printf("Table for client: %d\n", temp.own_address);
+        dijkstra_from_client(temp.own_address, clients, MAX_NUM_CLIENTS);
+        printf("\n\n\n");
+    
     }
 
     for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
