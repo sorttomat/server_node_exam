@@ -8,11 +8,8 @@ int MAX_NUM_CLIENTS;
 int max_num_edges;
 
 struct client *clients;
-struct node *nodes;
-struct edge *edges;
 
-int number_of_nodes;
-int number_of_edges;
+int number_of_clients;
 
 void print_client(struct client client);
 void print_edge(struct edge edge);
@@ -107,6 +104,7 @@ int accept_new_client(int socket_listener) {
     }
     return client_socket;
 }
+
 void deconstruct_message(char *received_information, struct client *client) {
 
     struct edge *edges = calloc(client->number_of_edges, sizeof(struct edge));
@@ -116,6 +114,14 @@ void deconstruct_message(char *received_information, struct client *client) {
     memcpy(edges, edges_temp, (client->number_of_edges) * sizeof(struct edge));
 
     client->edges = edges;
+}
+
+size_t deconstruct_header(int client_socket, int *own_address, int *number_of_edges) {
+    size_t bytes = 0;
+    bytes = receive_message(client_socket, own_address, sizeof(int));
+    bytes = receive_message(client_socket, number_of_edges, sizeof(int));
+
+    return bytes;
 }
 
 struct client* find_client_in_array(int client_socket) {
@@ -130,13 +136,11 @@ struct client* find_client_in_array(int client_socket) {
 
 size_t receive_information_fill_node(int client_socket) {
     size_t bytes = 0;
-
-    int own_address = 0;
-    bytes = receive_message(client_socket, &own_address, sizeof(int));
-    
     int number_of_edges = 0;
-    bytes = receive_message(client_socket, &number_of_edges, sizeof(int));
+    int own_address = 0;
 
+    bytes = deconstruct_header(client_socket, &own_address, &number_of_edges);
+    
     size_t size_of_edges = number_of_edges * sizeof(struct edge);
 
     char information[size_of_edges];
@@ -210,9 +214,8 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
                 }
                 
                 if (ret == 1) {
-                    (number_of_nodes)++;
-                    printf("%d\n", number_of_nodes);
-                    if (number_of_nodes == MAX_NUM_CLIENTS) {
+                    (number_of_clients)++;
+                    if (number_of_clients == MAX_NUM_CLIENTS) {
                         return 1;
                     }
 
@@ -221,7 +224,6 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
                     FD_CLR(i, fds);
 
                     remove_client(i);
-                    //remove node from nodes
                 }
             }
         }
@@ -237,7 +239,7 @@ size_t send_all_clients_added() {
         struct client current = clients[j];
         bytes = send_message(current.client_socket, ALL_CLIENTS_CONNECTED, strlen(ALL_CLIENTS_CONNECTED));
         if (bytes == -1) {
-            printf("Something wrong with receive_information_from_client\n");
+            printf("Something wrong with send_message in send_all_clients_added\n");
             return -1;
         }
         if (bytes ==  0) {
@@ -278,45 +280,80 @@ void run_server(int socket_listener) {
     }
 }
 
-int count_number_same_edge(struct edge edge) {
-    int counter = 0;
+int edges_are_two_ways(struct edge edge_a, struct edge edge_b) {
+    int yes = 1;
+    int no = 0;
 
-    for (int i = 0; i < number_of_edges; i++) {
-        struct edge current = edges[i];
-        if (current.to_address == edge.from_address) {
-            if (current.from_address == edge.to_address) {
-                if (current.weight == edge.weight) {
-                    counter += 1;
-                }
+    if (edge_a.to_address == edge_b.from_address) {
+        if (edge_a.from_address == edge_b.to_address) {
+            if (edge_a.weight == edge_b.weight) {
+                return yes;
             }
         }
     }
-    return counter;
+    return no;
 }
 
-void check_two_way_edges() {
-    printf("Checking two way edges\n");
-    int count = 0;
+int edges_equal(struct edge edge_a, struct edge edge_b) {
+    int yes = 1;
+    int no = 0;
 
-    for (int i = 0; i < number_of_edges; i++) {
-        count = count_number_same_edge(edges[i]);
-        if (count < 1) {
-            printf("Too few of this edge!\n");
-            print_edge(edges[i]);
-            //delete edge all together
+    if (edge_a.to_address == edge_b.to_address) {
+        if (edge_a.from_address == edge_b.from_address) {
+            if (edge_a.weight == edge_b.weight) {
+                return yes;
+            }
         }
+    }
+    return no;
+}
+
+int edge_goes_both_ways(struct edge edge) {
+    int yes = 1;
+    int no = 0;
+
+    for (int i = 0; i < number_of_clients; i++) {
+        struct client current_client = clients[i];
+
+        for (int j = 0; j < current_client.number_of_edges; j++) {
+            struct edge current_edge = current_client.edges[j];
+
+            if (edges_are_two_ways(current_edge, edge) == 1) {
+                return yes;
+            }
+        }
+    }
+    return no;
+}
+
+void delete_edge(struct edge edge, struct client *client) {
+
+    for (int i = 0; i < client->number_of_edges; i++) {
+        struct edge current_edge = client->edges[i];
+
+        if (edges_equal(current_edge, edge) == 1) {
+            client->edges[i] = client->edges[client->number_of_edges -1];
+            client->number_of_edges --;
+        }
+    }
+} 
+
+void print_all_edges_of_client(struct client client) {
+    for (int i = 0; i < client.number_of_edges; i++) {
+        struct edge current_edge = client.edges[i];
+        print_edge(current_edge);
     }
 }
 
-void add_all_edges_to_array() {
-    int offset_in_array = 0;
+void check_two_way_edges() {
+    for (int i = 0; i < number_of_clients; i++) {
+        struct client *current_client = &(clients[i]);
 
-    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
-        struct edge *edges_temp = clients[i].edges;
-        for (int j = 0; j < clients[i].number_of_edges; j++) {
-            edges[offset_in_array] = edges_temp[j];
-            offset_in_array ++;
-            number_of_edges++;
+        for (int j = 0; j < current_client->number_of_edges; j++) {
+            struct edge current_edge = current_client->edges[j];
+            if (edge_goes_both_ways(current_edge) == 0) {
+                delete_edge(current_edge, current_client);
+            }
         }
     }
 }
@@ -339,17 +376,17 @@ void print_edge(struct edge edge) {
 Dijkstra:
 */
 
-struct client *find_and_remove_client(int own_address, struct client *clients, int *number_of_clients_in_array) {
-    struct client *client_to_remove = malloc(sizeof(struct client)); //TODO: is this scary
+struct client *find_and_remove_client(int own_address, struct client *unvisited, int *number_of_clients_in_array) {
+   struct client *client_to_remove = malloc(sizeof(struct client)); //TODO: is this scary
 
     for (int i = 0; i < *number_of_clients_in_array; i++) {
-        struct client current = clients[i];
+        struct client current = unvisited[i];
         if (current.own_address == own_address) {
 
             memcpy(client_to_remove, &current, sizeof(struct client));
             int last_index_in_array = (*number_of_clients_in_array) -1;
 
-            clients[i] = clients[last_index_in_array];
+            unvisited[i] = unvisited[last_index_in_array];
 
             (*number_of_clients_in_array)--;
             return client_to_remove;
@@ -359,7 +396,7 @@ struct client *find_and_remove_client(int own_address, struct client *clients, i
     return NULL;
 } 
 
-void fill_table(struct table table[], struct client clients[], int number_of_clients) {
+void fill_table(struct table table[]) {
     for (int i = 0; i < number_of_clients; i++) {
         table[i].to_address = clients[i].own_address;
         table[i].weight = -1;
@@ -394,7 +431,7 @@ int is_unvisited(int address, struct client unvisited[], int number_of_unvisited
     return no;
 }
 
-void update_shortest_distance_from(struct client client, struct client unvisited[], int number_of_unvisited, int number_of_clients, struct table calculated_table[], int current_first_step) {
+void update_shortest_distance_from(struct client client, struct client unvisited[], int number_of_unvisited, struct table calculated_table[], int current_first_step) {
     int current_distance = find_table_entry(client.own_address, calculated_table, number_of_clients)->weight;
 
     for (int i = 0; i < client.number_of_edges; i++) {
@@ -411,8 +448,8 @@ void update_shortest_distance_from(struct client client, struct client unvisited
     }
 }
 
-void set_self_shortest_distance(int own_address, struct table calculated_table[], int number_of_entries) {
-    for (int i = 0; i < number_of_entries; i++) {
+void set_self_shortest_distance(int own_address, struct table calculated_table[]) {
+    for (int i = 0; i < number_of_clients; i++) {
         if (calculated_table[i].to_address == own_address) {
             calculated_table[i].first_client_on_route = own_address;
             calculated_table[i].weight = 0;
@@ -421,16 +458,16 @@ void set_self_shortest_distance(int own_address, struct table calculated_table[]
     }
 }
 
-void print_table(struct table table[], int number_of_entries) {
-    for (int i = 0; i < number_of_entries; i++) {
+void print_table(struct table table[]) {
+    for (int i = 0; i < number_of_clients; i++) {
         struct table current = table[i];
         printf("To: %d\tFirst step: %d\tWeight: %d\n", current.to_address, current.first_client_on_route, current.weight);
     }
 }
 
-void set_table(struct table calculated_table[], struct client unvisited[], int number_of_clients, int own_address) {
-    fill_table(calculated_table, unvisited, number_of_clients);
-    set_self_shortest_distance(own_address, calculated_table, number_of_clients); //these two could be merged
+void set_table(struct table calculated_table[], int own_address) {
+    fill_table(calculated_table);
+    set_self_shortest_distance(own_address, calculated_table); //these two could be merged
 }
 
 int find_smallest_weight_edge(struct client client, struct client unvisited[], int number_of_unvisited, int *address_of_client_to_visit) {
@@ -484,7 +521,7 @@ int address_of_client_to_visit(struct client visited[], int number_of_visited, s
     return address_of_client_to_visit;
 }
 
-void dijkstra_from_client(int own_address, struct client clients[], int number_of_clients) { //is going to return struct table *
+void dijkstra_from_client(int own_address) { //is going to return struct table *
     struct client *unvisited;
     unvisited = calloc(number_of_clients, sizeof(struct client));
     memcpy(unvisited, clients, number_of_clients * sizeof(struct client));
@@ -496,7 +533,7 @@ void dijkstra_from_client(int own_address, struct client clients[], int number_o
     struct table *calculated_table;
     calculated_table = calloc(number_of_clients, sizeof(struct table));
 
-    set_table(calculated_table, unvisited, number_of_clients, own_address);
+    set_table(calculated_table, own_address);
 
     int number_of_unvisited_clients = number_of_clients;
     int number_of_visited_clients = 0;
@@ -507,7 +544,7 @@ void dijkstra_from_client(int own_address, struct client clients[], int number_o
     visited[number_of_visited_clients] = *client_to_calculate; 
     number_of_visited_clients++;
 
-    update_shortest_distance_from(*client_to_calculate, unvisited, number_of_unvisited_clients, number_of_clients, calculated_table, current_first_step);
+    update_shortest_distance_from(*client_to_calculate, unvisited, number_of_unvisited_clients, calculated_table, current_first_step);
 
     int next_address = 0;
     struct client *next_client;
@@ -517,9 +554,9 @@ void dijkstra_from_client(int own_address, struct client clients[], int number_o
         next_client = find_and_remove_client(next_address, unvisited, &number_of_unvisited_clients); //this one is malloced
         visited[number_of_visited_clients] = *next_client;
         number_of_visited_clients++;
-        update_shortest_distance_from(*next_client, unvisited, number_of_unvisited_clients, number_of_clients, calculated_table, current_first_step);
+        update_shortest_distance_from(*next_client, unvisited, number_of_unvisited_clients, calculated_table, current_first_step);
     }
-    print_table(calculated_table, number_of_clients);
+    print_table(calculated_table);
 
     //TODO: go through visited and free? Should visited be array of pointers?
 }
@@ -535,33 +572,18 @@ int main(int argc, char *argv[]) {
 
     int server_socket = create_server_socket();
 
-    struct client clients_temp[MAX_NUM_CLIENTS];
-    clients = clients_temp;
-
-    number_of_edges = 0;
-
-    max_num_edges = MAX_NUM_CLIENTS * MAX_NUM_CLIENTS;
-    struct edge edges_temp[max_num_edges];
-    edges = edges_temp;
+    clients = calloc(MAX_NUM_CLIENTS, sizeof(struct client));
 
     run_server(server_socket);
     send_all_clients_added();
-    add_all_edges_to_array();
 
     check_two_way_edges();
-
-
-    // for (int i = 0; i < MAX_NUM_CLIENTS; i++) { //could be empty spots?
-    //     struct client client = clients[i];
-    //     print_client(client);
-        
-    // }
 
     struct client temp;
     for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
         temp = clients[i];
         printf("Table for client: %d\n", temp.own_address);
-        dijkstra_from_client(temp.own_address, clients, MAX_NUM_CLIENTS);
+        dijkstra_from_client(temp.own_address);
         printf("\n\n\n");
     
     }
@@ -569,5 +591,7 @@ int main(int argc, char *argv[]) {
     for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
         remove_client(clients[j].client_socket);
     }
+
+    free(clients);
     return 0;
 }
