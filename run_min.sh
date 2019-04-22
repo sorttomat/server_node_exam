@@ -28,7 +28,7 @@ fi
 cp $MESSAGES_FILENAME "./data.txt"
 
 # Run routing server C
-$VALGRIND ./routing_server $BASE_PORT 8          &>"$LOG_DIR/routing_server_log.txt" &
+#$VALGRIND ./routing_server $BASE_PORT 8          &>"$LOG_DIR/routing_server_log.txt" &
 
 # Wait for the central server to start. If you have to wait for more than 1 seconds you
 # are probably doing something wrong. 
