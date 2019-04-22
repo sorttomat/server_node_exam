@@ -359,17 +359,17 @@ void check_two_way_edges() {
 }
 
 void print_client(struct client client) {
-    printf("Own address: %d\t", client.own_address);
-    printf("Number of edges: %d\n", client.number_of_edges);
-    printf("Edges:\n");
+    fprintf(stdout, "Own address: %d\t", client.own_address);
+    fprintf(stdout, "Number of edges: %d\n", client.number_of_edges);
+    fprintf(stdout, "Edges:\n");
     for (int i = 0; i < client.number_of_edges; i++) {
-        printf("\tTo: %d\tFrom: %d\tWeight: %d\n", client.edges[i].to_address, client.edges[i].from_address, client.edges[i].weight);
+        print_edge(client.edges[i]);
     }
-    printf("\n");
+    fprintf(stdout, "\n");
 }
 
 void print_edge(struct edge edge) {
-    printf("To: %d\tFrom: %d\tWeight: %d\n", edge.to_address, edge.from_address, edge.weight);
+    fprintf(stdout, "To: %d\tFrom: %d\tWeight: %d\n", edge.to_address, edge.from_address, edge.weight);
 }
 
 /*
@@ -461,7 +461,7 @@ void set_self_shortest_distance(int own_address, struct table calculated_table[]
 void print_table(struct table table[]) {
     for (int i = 0; i < number_of_clients; i++) {
         struct table current = table[i];
-        printf("To: %d\tFirst step: %d\tWeight: %d\n", current.to_address, current.first_client_on_route, current.weight);
+        fprintf(stdout, "To: %d\tFirst step: %d\tWeight: %d\n", current.to_address, current.first_client_on_route, current.weight);
     }
 }
 
@@ -528,18 +528,17 @@ struct table *dijkstra_from_client(int own_address) { //is going to return struc
 
     struct client visited[number_of_clients];
 
-    int current_first_step = own_address;
-
     struct table *calculated_table;
     calculated_table = calloc(number_of_clients, sizeof(struct table));
 
     set_table(calculated_table, own_address);
 
+    int current_first_step = own_address;
+
     int number_of_unvisited_clients = number_of_clients;
     int number_of_visited_clients = 0;
 
     struct client *client_to_calculate = find_and_remove_client(own_address, unvisited, &number_of_unvisited_clients); //this one is malloced
-
 
     visited[number_of_visited_clients] = *client_to_calculate; 
     number_of_visited_clients++;
@@ -560,9 +559,8 @@ struct table *dijkstra_from_client(int own_address) { //is going to return struc
 
         free(next_client); //scary?
     }
-    print_table(calculated_table);
 
-    //TODO: go through visited and free? Should visited be array of pointers?
+    free(unvisited);
     return calculated_table;
 }
 
@@ -577,7 +575,6 @@ struct table *find_table(int address, struct table *all_tables[]) {
     return NULL;
 }
 
-//TODO: implements function that finds all clients on path from node 1 to node x.
 void all_clients_on_path_from_start_to_end(struct table *all_tables[], int address_end, int *length_of_path, int addresses_on_path[]){
     int offset_in_addresses = 0;
     int current_address = 1;
@@ -623,6 +620,112 @@ void update_table(int address_table, int address_end, int *path, int path_length
     }
 }
 
+void calculate_tables(struct table *all_tables[]) {
+    int offset_in_all_tables = 0;
+
+    struct client temp;
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        temp = clients[i];
+        all_tables[offset_in_all_tables] = dijkstra_from_client(temp.own_address);
+        offset_in_all_tables++;
+    
+    }
+    
+    int *path;
+    int path_length;
+    for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
+        all_clients_on_path_from_start_to_end(all_tables, clients[j].own_address, &path_length, path);
+
+        for (int k = 0; k < path_length; k++) {
+            fprintf(stdout, "%d -> ", path[k]);
+        }
+        fprintf(stdout, "\n");
+    }
+
+    for (int l = 0; l < MAX_NUM_CLIENTS; l++) {
+        struct table *table_to_update = find_table(clients[l].own_address, all_tables);
+
+        for (int m = 0; m < MAX_NUM_CLIENTS; m++) {
+            all_clients_on_path_from_start_to_end(all_tables, clients[m].own_address, &path_length, path);
+            update_table(clients[l].own_address, clients[m].own_address, path, path_length, table_to_update);
+
+        }
+    }
+}
+
+int count_valid_table_entries(struct table table[]) {
+    int counter = 0;
+
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        struct table current = table[i];
+        if (current.weight != -1) {
+            counter++;
+        }
+    }
+    return counter;
+}
+
+void create_table_packet(char *packet, struct table table[], int *number_of_entries) {
+    int offset_in_packet;
+    memcpy(&(packet[0]), number_of_entries, sizeof(size_t));
+
+    offset_in_packet = sizeof(int);
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        struct table entry = table[i];
+        if (entry.weight != -1) {
+            memcpy(&(packet[offset_in_packet]), &(entry.to_address), sizeof(int));
+            offset_in_packet += sizeof(int);
+
+            memcpy(&(packet[offset_in_packet]), &(entry.first_client_on_route), sizeof(int));
+            offset_in_packet += sizeof(int);            
+        }
+    }
+}
+
+void send_table_to_client(int client_socket, struct table table[]) {
+    int number_of_valid_entries = count_valid_table_entries(table);
+    size_t total_size_of_packet = number_of_valid_entries * (sizeof(int) * 2) + sizeof(int);
+    char packet[total_size_of_packet];
+    create_table_packet(packet, table, &number_of_valid_entries);
+
+    send_message(client_socket, packet, total_size_of_packet);
+}
+
+void send_table_all_clients(struct table *all_tables[]) {
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        struct client current = clients[i];
+        if (current.client_socket != -1) {
+            struct table *table = find_table(current.own_address, all_tables);
+
+            send_table_to_client(current.client_socket, table);
+
+        }
+    }
+}
+
+void print_all_clients_and_tables(struct table *all_tables[]) {
+    fprintf(stdout, "Printing all clients.\n");
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        print_client(clients[i]);
+        fprintf(stdout, "\n\n");
+    }
+
+    fprintf(stdout, "Printing all calculated tables.\n");
+    for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
+        print_table(all_tables[j]);
+        fprintf(stdout, "\n\n");
+    }
+
+}
+
+void free_all(struct table *all_tables[]) {
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        remove_client(clients[i].client_socket);
+        free(all_tables[i]);
+    }
+    free(clients);
+}
+
 int main(int argc, char *argv[]) {
     assert(argc == 3);
 
@@ -634,60 +737,17 @@ int main(int argc, char *argv[]) {
     clients = calloc(MAX_NUM_CLIENTS, sizeof(struct client));
 
     run_server(server_socket);
-    send_all_clients_added();
-
+    
     check_two_way_edges();
 
     struct table *all_tables[MAX_NUM_CLIENTS];
-    int offset_in_all_tables = 0;
 
-    struct client temp;
-    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
-        temp = clients[i];
-        printf("Table for client: %d\n", temp.own_address);
-        all_tables[offset_in_all_tables] = dijkstra_from_client(temp.own_address);
-        offset_in_all_tables++;
+    calculate_tables(all_tables);
 
-        printf("\n\n\n");
+    send_table_all_clients(all_tables);
     
-    }
-    
-    int *path;
-    int path_length;
-    for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
-        all_clients_on_path_from_start_to_end(all_tables, clients[j].own_address, &path_length, path);
+    print_all_clients_and_tables(all_tables);
 
-        for (int k = 0; k < path_length; k++) {
-            printf("%d -> ", path[k]);
-        }
-        printf("\n");
-        //remove_client(clients[j].client_socket);
-    }
-
-    for (int l = 0; l < MAX_NUM_CLIENTS; l++) {
-        struct table *table_to_update = find_table(clients[l].own_address, all_tables);
-
-        for (int m = 0; m < MAX_NUM_CLIENTS; m++) {
-            all_clients_on_path_from_start_to_end(all_tables, clients[m].own_address, &path_length, path);
-            update_table(clients[l].own_address, clients[m].own_address, path, path_length, table_to_update);
-        }
-    }
-
-    for (int n = 0; n < MAX_NUM_CLIENTS; n++) {
-        print_table(all_tables[n]);
-        printf("\n");
-    }
-
-
-
-    // all_clients_on_path_from_start_to_end(all_tables, 107, &path_length, path);
-
-    // struct table *table_to_update = find_table(103, all_tables);
-    // print_table(table_to_update);
-    // printf("\n");
-    // update_table(103, 107, path, path_length, table_to_update);
-    // print_table(table_to_update);
-
-    free(clients);
+    free_all(all_tables);
     return 0;
 }

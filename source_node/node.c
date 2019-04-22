@@ -1,10 +1,18 @@
 
 #include "../source_shared/protocol.h"
 
+struct table {
+    int to_address;
+    int first_client_on_route;
+};
+
 int baseport = 0;
 
 struct node *node;
 struct edge *edges;
+struct table *table;
+
+int number_of_table_entries;
 
 int create_and_connect_socket() {
     struct sockaddr_in server_addr;
@@ -19,7 +27,7 @@ int create_and_connect_socket() {
     server_addr.sin_port = htons(baseport);
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    printf("Connecting to router ..........\n");
+    fprintf(stdout, "Connecting to router ..........\n");
     int ret = connect(client_socket, (struct sockaddr *)&server_addr, sizeof(struct sockaddr_in));
     if (ret == -1) {
         perror("connect");
@@ -33,29 +41,17 @@ int hand_shake(int client_socket) {
 
     size_t bytes = receive_message(client_socket, buf, strlen(RESPONSE_SUCCESS)); //could be response_failure
     if (bytes == -1) {
-        printf("Something wrong with receive message\n");
+        fprintf(stdout, "Something wrong with receive message\n");
         return EXIT_FAILURE;
     }
     if (bytes == 0) {
-        printf("Server has disconnected\n");
+        fprintf(stdout, "Server has disconnected\n");
         return EXIT_SUCCESS; //?
     }
 
     buf[bytes] = '\0';
-    printf("%s\n", buf);
+    fprintf(stdout, "%s\n", buf);
     return EXIT_SUCCESS;
-}
-
-void deconstruct_message(char *message) { //just for testing
-    int own_address = 0;
-    int number_of_edges = 0;
-    struct edge edge;
-
-    memcpy(&own_address, &(message[0]), sizeof(int));
-    memcpy(&(number_of_edges), &(message[4]), sizeof(int));
-    memcpy(&(edge), &(message[8]), sizeof(struct edge));
-
-    printf("Own address: %d\nNumber of edges: %d\nTo: %d\nFrom: %d\nWeight: %d\n\n", own_address, number_of_edges, edge.to_address, edge.from_address, edge.weight);
 }
 
 void construct_message(char *buffer_to_send) {
@@ -89,43 +85,13 @@ size_t send_information(int client_socket) {
         return EXIT_FAILURE;
     }
     if (bytes == 0) {
-        printf("Server has disconnected\n");
+        fprintf(stdout, "Server has disconnected\n");
         free(buffer_to_send);
         return EXIT_SUCCESS; //?
     }
 
     free(buffer_to_send);
     return bytes;
-}
-
-size_t receive_all_nodes_connected(int client_socket) {
-    size_t bytes = 0;
-    char *buffer;
-    
-    buffer = malloc(strlen(ALL_CLIENTS_CONNECTED) * sizeof(char));
-
-    if (buffer == NULL) {
-        perror("malloc");
-        exit(EXIT_FAILURE);
-    }
-    
-    bytes = receive_message(client_socket, buffer, strlen(ALL_CLIENTS_CONNECTED));
-
-    if (bytes == -1) {
-        free(buffer);
-        return EXIT_FAILURE;
-    }
-    if (bytes == 0) {
-        printf("Server has disconnected\n");
-        free(buffer);
-        return EXIT_SUCCESS; //?
-    }
-
-    printf("%s\n", buffer);
-
-    free(buffer);
-    close(client_socket);
-    return EXIT_SUCCESS;
 }
 
 struct edge create_edge(char *info, int size_of_info) {
@@ -180,11 +146,32 @@ void create_node_struct(int own_address, char *info_edges[], int client_socket, 
 void free_all() {
     free(edges);
     free(node);
+    free(table);
+}
+
+void receive_table(int client_socket) {
+    receive_message(client_socket, &number_of_table_entries, sizeof(int));
+
+    table = calloc(number_of_table_entries, sizeof(struct table));
+
+    size_t size_of_rest_of_message = number_of_table_entries * sizeof(struct table);
+
+    receive_message(client_socket, table, size_of_rest_of_message);
+    
+}
+
+void print_node() {
+    fprintf(stdout, "Own address: %d\tClient socket: %d\tNumber of edges: %d\n", node->own_address, node->client_socket, node->number_of_edges);
+
+    for (int i = 0; i < node->number_of_edges; i++) {
+        fprintf(stdout, "To: %d\tFrom: %d\tWeight: %d\n", node->edges[i].to_address, node->edges[i].from_address, node->edges[i].weight);
+    }
+    fprintf(stdout, "\n\n");
 }
 
 int main(int argc, char *argv[]) {
     if (argc <= 2) {
-        printf("Number of arguments are too few!\n");
+        fprintf(stdout, "Number of arguments are too few!\n");
         exit(EXIT_FAILURE);
     }
 
@@ -203,7 +190,17 @@ int main(int argc, char *argv[]) {
     create_node_struct(own_address, edges_info, client_socket, number_of_edges);
 
     send_information(client_socket);
-    receive_all_nodes_connected(client_socket);
+
+    receive_table(client_socket);
+
+    print_node();
+
+    fprintf(stdout, "PRINTING TABLE FOR NODE %d\n", node->own_address);
+    for (int i = 0; i < number_of_table_entries; i++) {
+        struct table entry = table[i];
+        fprintf(stdout, "Address to: %d\tFirst client on route: %d\n", entry.to_address, entry.first_client_on_route);
+        fprintf(stdout, "\n");
+    }
 
     free_all();
     return EXIT_SUCCESS; 

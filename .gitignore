@@ -2,3 +2,4 @@
 .vscode/ipch/*
 node
 routing_server
+logs/*

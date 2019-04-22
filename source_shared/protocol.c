@@ -41,7 +41,6 @@ int send_message(int client_socket, void *buf, size_t total_bytes_to_send) {
     char_buf = buf;
     while (total_bytes_sent < total_bytes_to_send) {
         received_bytes_this_round = send(client_socket, char_buf + total_bytes_sent, total_bytes_to_send-total_bytes_sent, 0);
-        printf("This round: %zu\n", received_bytes_this_round);
         if (received_bytes_this_round == -1) {
             printf("Something wring with send\n");
             return EXIT_FAILURE;
