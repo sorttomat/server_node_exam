@@ -16,4 +16,5 @@ clean:
 	rm -f routing_server
 	rm -f node
 	rm -f protocol
+	rm logfile.txt
 	
