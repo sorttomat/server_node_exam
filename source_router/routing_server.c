@@ -752,15 +752,23 @@ int main(int argc, char *argv[]) {
     int server_socket = create_server_socket();
 
     clients = calloc(MAX_NUM_CLIENTS, sizeof(struct client));
-
+    printf("Starting server\n");
     run_server(server_socket);
+    printf("Finished server\n");
+
+    printf("Starting to check two way edges\n");
     check_two_way_edges();
+    printf("Finished\n");
 
     struct table **all_tables = malloc(sizeof(struct table*) * MAX_NUM_CLIENTS);
 
+    printf("Starting calculate tables\n");
     calculate_tables(all_tables);
+    printf("Finished\n");
 
+    printf("sending tables\n");
     send_table_all_clients(all_tables);
+    printf("Finished\n");
 
     print_all_clients_and_tables(all_tables);
 
