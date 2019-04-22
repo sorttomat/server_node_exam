@@ -1,6 +1,7 @@
 
 #include "../source_shared/protocol.h"
 #include "routing_server.h"
+#include "../print_lib/print_lib.h"
 
 int BASEPORT;
 int BACKLOG_SIZE = 10;
@@ -648,7 +649,7 @@ void calculate_tables(struct table *all_tables[]) {
         for (int m = 0; m < MAX_NUM_CLIENTS; m++) {
             all_clients_on_path_from_start_to_end(all_tables, clients[m].own_address, &path_length, path);
             update_table(clients[l].own_address, clients[m].own_address, path, path_length, table_to_update);
-
+            print_weighted_edge((short) clients[l].own_address, clients[m].own_address, find_table_entry(clients[m].own_address, table_to_update, MAX_NUM_CLIENTS)->weight);
         }
     }
 }

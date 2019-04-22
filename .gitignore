@@ -3,3 +3,4 @@
 node
 routing_server
 logs/*
+logfile.txt

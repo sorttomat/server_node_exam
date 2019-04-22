@@ -1,5 +1,6 @@
 
 #include "../source_shared/protocol.h"
+#include "../print_lib/print_lib.h"
 
 struct table {
     int to_address;
@@ -161,12 +162,23 @@ void receive_table(int client_socket) {
 }
 
 void print_node() {
-    fprintf(stdout, "Own address: %d\tClient socket: %d\tNumber of edges: %d\n", node->own_address, node->client_socket, node->number_of_edges);
+    fprintf(stdout, "NODE:\n");
 
+    fprintf(stdout, "Own address: %d\tClient socket: %d\tNumber of edges: %d\n\n", node->own_address, node->client_socket, node->number_of_edges);
+
+    fprintf(stdout, "EDGES:\n");
     for (int i = 0; i < node->number_of_edges; i++) {
         fprintf(stdout, "To: %d\tFrom: %d\tWeight: %d\n", node->edges[i].to_address, node->edges[i].from_address, node->edges[i].weight);
     }
     fprintf(stdout, "\n\n");
+    fprintf(stdout, "TABLE:\n");
+
+    for (int i = 0; i < number_of_table_entries; i++) {
+        struct table entry = table[i];
+        fprintf(stdout, "Address to: %d\tFirst client on route: %d\n", entry.to_address, entry.first_client_on_route);
+        fprintf(stdout, "\n");
+    }
+
 }
 
 int main(int argc, char *argv[]) {
@@ -194,13 +206,6 @@ int main(int argc, char *argv[]) {
     receive_table(client_socket);
 
     print_node();
-
-    fprintf(stdout, "PRINTING TABLE FOR NODE %d\n", node->own_address);
-    for (int i = 0; i < number_of_table_entries; i++) {
-        struct table entry = table[i];
-        fprintf(stdout, "Address to: %d\tFirst client on route: %d\n", entry.to_address, entry.first_client_on_route);
-        fprintf(stdout, "\n");
-    }
 
     free_all();
     return EXIT_SUCCESS; 
