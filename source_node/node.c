@@ -205,8 +205,8 @@ int main(int argc, char *argv[]) {
 
     receive_table(client_socket);
 
-    print_node();
+    // print_node();
 
-    free_all();
+    // free_all();
     return EXIT_SUCCESS; 
 } 

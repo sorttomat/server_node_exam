@@ -12,6 +12,8 @@ if [ $1 -lt $MIN_PORT ] || [ $1 -gt $MAX_PORT ]; then
     echo "Port $1 is not in the range [$MIN_PORT, $MAX_PORT]"
     exit
 fi
+rm logfile.txt
+rm -rf logs/
 
 BASE_PORT=$1
 MESSAGES_FILENAME="messages_1.txt"
@@ -28,7 +30,7 @@ fi
 cp $MESSAGES_FILENAME "./data.txt"
 
 # Run routing server C
-$VALGRIND ./routing_server $BASE_PORT 8          &>"$LOG_DIR/routing_server_log.txt" &
+#$VALGRIND ./routing_server $BASE_PORT 8          &>"$LOG_DIR/routing_server_log.txt" &
 
 # Wait for the central server to start. If you have to wait for more than 1 seconds you
 # are probably doing something wrong. 

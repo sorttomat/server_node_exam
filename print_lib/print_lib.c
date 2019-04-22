@@ -151,7 +151,8 @@ void print_weighted_edge( short from_node, short to_node, int weight )
     {
         fprintf( logfile, "[C]: distance from 1 to %d is %d\n", from_node, weight );
         fprintf( logfile, "[C]: %d IS on path from 1 to %d\n", from_node, to_node );
-    }   
+    }  
+     
     fclose( logfile );
 }
 
