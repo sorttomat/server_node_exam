@@ -644,12 +644,18 @@ void calculate_tables(struct table *all_tables[]) {
     }
 
     for (int l = 0; l < MAX_NUM_CLIENTS; l++) {
-        struct table *table_to_update = find_table(clients[l].own_address, all_tables);
+        struct client *owner_of_table_to_update = &(clients[l]);
+        struct table *table_to_update = find_table(owner_of_table_to_update->own_address, all_tables);
 
         for (int m = 0; m < MAX_NUM_CLIENTS; m++) {
-            all_clients_on_path_from_start_to_end(all_tables, clients[m].own_address, &path_length, path);
-            update_table(clients[l].own_address, clients[m].own_address, path, path_length, table_to_update);
-            print_weighted_edge((short) clients[l].own_address, clients[m].own_address, find_table_entry(clients[m].own_address, table_to_update, MAX_NUM_CLIENTS)->weight);
+            struct client *client_to_check = &(clients[m]);
+            all_clients_on_path_from_start_to_end(all_tables, client_to_check->own_address, &path_length, path);
+            update_table(owner_of_table_to_update->own_address, client_to_check->own_address, path, path_length, table_to_update);
+
+            int address_from = owner_of_table_to_update->own_address;
+            int address_to = client_to_check->own_address;
+            
+            print_weighted_edge(address_from, address_to, find_table_entry(address_to, table_to_update, MAX_NUM_CLIENTS)->weight);
         }
     }
 }
