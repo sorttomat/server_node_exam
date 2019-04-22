@@ -166,6 +166,7 @@ size_t receive_information_fill_node(int client_socket) {
 }
 
 int receive_from_client(int client_socket) {
+    printf("Receiving from socket %d\n", client_socket);
     size_t bytes;
 
     bytes = receive_information_fill_node(client_socket);
@@ -207,7 +208,6 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
             else {
                 /* Receive from existing client */
                 int ret = receive_from_client(i);
-
                 if (ret == -1) {
                     printf("Error in receive_from_client\n");
                     //clean up?
@@ -524,19 +524,19 @@ int address_of_client_to_visit(struct client visited[], int number_of_visited, s
 
 struct table *dijkstra_from_client(int own_address) { //is going to return struct table *
     struct client *unvisited;
-    unvisited = calloc(number_of_clients, sizeof(struct client));
-    memcpy(unvisited, clients, number_of_clients * sizeof(struct client));
+    unvisited = calloc(MAX_NUM_CLIENTS, sizeof(struct client));
+    memcpy(unvisited, clients, MAX_NUM_CLIENTS * sizeof(struct client));
 
-    struct client visited[number_of_clients];
+    struct client *visited = calloc(MAX_NUM_CLIENTS, sizeof(struct client));
 
     struct table *calculated_table;
-    calculated_table = calloc(number_of_clients, sizeof(struct table));
+    calculated_table = calloc(MAX_NUM_CLIENTS, sizeof(struct table));
 
     set_table(calculated_table, own_address);
 
     int current_first_step = own_address;
 
-    int number_of_unvisited_clients = number_of_clients;
+    int number_of_unvisited_clients = MAX_NUM_CLIENTS;
     int number_of_visited_clients = 0;
 
     struct client *client_to_calculate = find_and_remove_client(own_address, unvisited, &number_of_unvisited_clients); //this one is malloced
@@ -547,12 +547,20 @@ struct table *dijkstra_from_client(int own_address) { //is going to return struc
     update_shortest_distance_from(*client_to_calculate, unvisited, number_of_unvisited_clients, calculated_table, current_first_step);
     free(client_to_calculate);
 
+    print_table(calculated_table);
     int next_address = 0;
     struct client *next_client;
     while (number_of_unvisited_clients > 0) {
         next_address = address_of_client_to_visit(visited, number_of_visited_clients, unvisited, number_of_unvisited_clients, &current_first_step, own_address);
+        if (next_address == -1) {
+            fprintf(stdout, "No next client\n");
+            break;
+        }
 
         next_client = find_and_remove_client(next_address, unvisited, &number_of_unvisited_clients); 
+
+        print_client(*next_client);
+
         visited[number_of_visited_clients] = *next_client;
         number_of_visited_clients++;
 
@@ -560,6 +568,7 @@ struct table *dijkstra_from_client(int own_address) { //is going to return struc
 
         free(next_client); //scary?
     }
+    print_table(calculated_table);
 
     free(unvisited);
     return calculated_table;
@@ -632,7 +641,7 @@ void calculate_tables(struct table *all_tables[]) {
     
     }
     
-    int *path;
+    int path[number_of_clients];
     int path_length;
     for (int j = 0; j < MAX_NUM_CLIENTS; j++) {
         all_clients_on_path_from_start_to_end(all_tables, clients[j].own_address, &path_length, path);
@@ -642,6 +651,7 @@ void calculate_tables(struct table *all_tables[]) {
         }
         fprintf(stdout, "\n");
     }
+
 
     for (int l = 0; l < MAX_NUM_CLIENTS; l++) {
         struct client *owner_of_table_to_update = &(clients[l]);
@@ -744,15 +754,14 @@ int main(int argc, char *argv[]) {
     clients = calloc(MAX_NUM_CLIENTS, sizeof(struct client));
 
     run_server(server_socket);
-    
     check_two_way_edges();
 
-    struct table *all_tables[MAX_NUM_CLIENTS];
+    struct table **all_tables = malloc(sizeof(struct table*) * MAX_NUM_CLIENTS);
 
     calculate_tables(all_tables);
 
     send_table_all_clients(all_tables);
-    
+
     print_all_clients_and_tables(all_tables);
 
     free_all(all_tables);
