@@ -360,7 +360,7 @@ void print_client(struct client client) {
     for (int i = 0; i < client.number_of_edges; i++) {
         print_edge(client.edges[i]);
     }
-    fprintf(stdout, "\n");
+    fprintf(stdout, "\n\n");
 }
 
 void print_edge(struct edge edge) {
