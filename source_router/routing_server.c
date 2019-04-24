@@ -435,7 +435,8 @@ void send_table_client(struct dijkstra_node node, struct table table[], int numb
     int client_socket = node.client.client_socket;
 
     if (number_of_entries == 0) {
-        send(client_socket, 0, sizeof(int), 0);
+        int to_send = 0;
+        send(client_socket, &to_send, sizeof(int), 0);
     }
     else {
         char *buffer = calloc(number_of_entries, sizeof(struct table));
