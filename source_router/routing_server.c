@@ -370,6 +370,7 @@ void print_edge(struct edge edge) {
 void free_all() {
     for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
         remove_client(clients[i].client_socket);
+        free(array_of_dijkstra_nodes[i].path);
     }
     free(clients);
     free(array_of_dijkstra_nodes);
@@ -435,7 +436,7 @@ void send_table_client(struct dijkstra_node node, struct table table[], int numb
     int client_socket = node.client.client_socket;
 
     char buffer[number_of_entries * sizeof(struct table)];
-    
+
     size_t size_of_message = sizeof(struct table) * number_of_entries + sizeof(int);
 
     create_packet(buffer, table, number_of_entries);
