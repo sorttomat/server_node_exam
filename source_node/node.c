@@ -2,11 +2,6 @@
 #include "../source_shared/protocol.h"
 #include "../print_lib/print_lib.h"
 
-struct table {
-    int to_address;
-    int first_client_on_route;
-};
-
 int baseport = 0;
 
 struct node *node;
@@ -178,7 +173,6 @@ void print_node() {
         fprintf(stdout, "Address to: %d\tFirst client on route: %d\n", entry.to_address, entry.first_client_on_route);
         fprintf(stdout, "\n");
     }
-
 }
 
 int main(int argc, char *argv[]) {
@@ -205,8 +199,8 @@ int main(int argc, char *argv[]) {
 
     receive_table(client_socket);
 
-    // print_node();
+    print_node();
 
-    // free_all();
+    free_all();
     return EXIT_SUCCESS; 
 } 

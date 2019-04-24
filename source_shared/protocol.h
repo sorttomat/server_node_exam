@@ -32,6 +32,11 @@ struct header {
     int number_of_edges;
 };
 
+struct table {
+    int to_address;
+    int first_client_on_route;
+};
+
 char *RESPONSE_SUCCESS;
 char *RESPONSE_FULL;
 char *ALL_CLIENTS_CONNECTED;

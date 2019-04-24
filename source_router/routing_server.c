@@ -340,13 +340,6 @@ void delete_edge(struct edge edge, struct client *client) {
     }
 } 
 
-void print_all_edges_of_client(struct client client) {
-    for (int i = 0; i < client.number_of_edges; i++) {
-        struct edge current_edge = client.edges[i];
-        print_edge(current_edge);
-    }
-}
-
 void check_two_way_edges() {
     for (int i = 0; i < number_of_clients; i++) {
         struct client *current_client = &(clients[i]);
@@ -374,12 +367,12 @@ void print_edge(struct edge edge) {
     fprintf(stdout, "To: %d\tFrom: %d\tWeight: %d\n", edge.to_address, edge.from_address, edge.weight);
 }
 
-void free_all(struct table *all_tables[]) {
+void free_all() {
     for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
         remove_client(clients[i].client_socket);
-        free(all_tables[i]);
     }
     free(clients);
+    free(array_of_dijkstra_nodes);
 }
 
 void print_all_combinations() {
@@ -403,6 +396,67 @@ void print_all_combinations() {
     }
 }
 
+void create_table_client(struct dijkstra_node client, struct table table[], int *number_of_entries) {
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        struct dijkstra_node current = array_of_dijkstra_nodes[i];
+
+        if (current.client.own_address == client.client.own_address) {
+            continue;
+        }
+
+        int *path_of_current = current.path;
+        int path_length = current.number_of_nodes_in_path;
+
+        for (int j = 0; j < path_length-1; j++) {
+            if (path_of_current[j] == client.client.own_address) {
+                table[*number_of_entries].to_address = current.client.own_address;
+                table[*number_of_entries].first_client_on_route = path_of_current[j+1];
+                (*number_of_entries)++;
+            }
+        }
+    }
+}
+
+void create_packet(char *buffer, struct table table[], int number_of_entries) {
+    int offset_in_buffer = 0;
+
+    memcpy(&(buffer[offset_in_buffer]), &number_of_entries, sizeof(int));
+
+    for (int i = 0; i < number_of_entries; i++) {
+        offset_in_buffer += sizeof(int);
+        memcpy(&(buffer[offset_in_buffer]), &(table[i].to_address), sizeof(int));
+
+        offset_in_buffer += sizeof(int);
+        memcpy(&(buffer[offset_in_buffer]), &(table[i].first_client_on_route), sizeof(int));
+    }
+}
+
+void send_table_client(struct dijkstra_node node, struct table table[], int number_of_entries) {
+    int client_socket = node.client.client_socket;
+
+    char *buffer = calloc(number_of_entries, sizeof(struct table));
+    size_t size_of_message = sizeof(struct table) * number_of_entries + sizeof(int);
+
+    create_packet(buffer, table, number_of_entries);
+
+    send_message(client_socket, buffer, size_of_message);
+
+    free(buffer);
+}
+
+void send_tables_all_clients() {
+    for (int i = 0; i < MAX_NUM_CLIENTS; i++) {
+        struct dijkstra_node node_to_calculate_table_for = array_of_dijkstra_nodes[i];
+
+        struct table table[MAX_NUM_CLIENTS];
+        int number_of_entries = 0;
+
+        create_table_client(node_to_calculate_table_for, table, &number_of_entries);
+
+        send_table_client(node_to_calculate_table_for, table, number_of_entries);
+    }
+}
+
 int main(int argc, char *argv[]) {
     assert(argc == 3);
 
@@ -423,18 +477,9 @@ int main(int argc, char *argv[]) {
     array_of_dijkstra_nodes = calloc(MAX_NUM_CLIENTS, sizeof(struct dijkstra_node));
     new_dijkstra();
     print_all_combinations();
-    // struct table **all_tables = malloc(sizeof(struct table*) * MAX_NUM_CLIENTS);
 
-    // printf("Starting calculate tables\n");
-    // calculate_tables(all_tables);
-    // printf("Finished\n");
+    send_tables_all_clients();
 
-    // printf("sending tables\n");
-    // send_table_all_clients(all_tables);
-    // printf("Finished\n");
-
-    // print_all_clients_and_tables(all_tables);
-
-    //free_all(all_tables);
+    free_all();
     return 0;
 }
