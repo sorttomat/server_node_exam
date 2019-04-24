@@ -434,14 +434,19 @@ void create_packet(char *buffer, struct table table[], int number_of_entries) {
 void send_table_client(struct dijkstra_node node, struct table table[], int number_of_entries) {
     int client_socket = node.client.client_socket;
 
-    char *buffer = calloc(number_of_entries, sizeof(struct table));
-    size_t size_of_message = sizeof(struct table) * number_of_entries + sizeof(int);
+    if (number_of_entries == 0) {
+        send(client_socket, 0, sizeof(int), 0);
+    }
+    else {
+        char *buffer = calloc(number_of_entries, sizeof(struct table));
+        size_t size_of_message = sizeof(struct table) * number_of_entries + sizeof(int);
 
-    create_packet(buffer, table, number_of_entries);
+        create_packet(buffer, table, number_of_entries);
 
-    send_message(client_socket, buffer, size_of_message);
+        send_message(client_socket, buffer, size_of_message);
 
-    free(buffer);
+        free(buffer);
+    }
 }
 
 void send_tables_all_clients() {
