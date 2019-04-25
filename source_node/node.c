@@ -1,14 +1,20 @@
 
 #include "../source_shared/protocol.h"
 #include "../print_lib/print_lib.h"
+#include <stdbool.h>
+#include <netinet/in.h>
+#include <stdio.h>
 
 int baseport = 0;
+int own_address;
 
 struct node *node;
 struct edge *edges;
 struct table *table;
 
 int number_of_table_entries;
+
+struct sockaddr_in udp_sockaddr;
 
 int create_and_connect_socket() {
     struct sockaddr_in server_addr;
@@ -175,6 +181,189 @@ void print_node() {
     }
 }
 
+int create_and_connect_udp_socket() {
+    printf("Node %d connecting to socket!\n", own_address);
+    struct sockaddr_in udp_sockaddr;
+	int ret;
+    int yes = -1; 
+    int udp_socket;
+
+	udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
+	if (udp_socket == -1) {
+		perror("socket");
+        exit(EXIT_FAILURE);
+	}
+
+	udp_sockaddr.sin_family = AF_INET; 
+	udp_sockaddr.sin_port = htons(baseport + own_address);	
+    udp_sockaddr.sin_addr.s_addr = INADDR_ANY;
+
+	setsockopt(udp_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+
+    printf("Baseport: %d\tOwn address: %d\tUDP socket: %d\n", baseport, own_address, udp_socket);
+
+
+    if (own_address == 1) {
+        sleep(1);
+    }
+
+	ret = bind(udp_socket, (struct sockaddr*)&udp_sockaddr, sizeof(udp_sockaddr));
+	if (ret) {
+		perror("bind");
+        exit(EXIT_FAILURE);
+	}
+
+    return udp_socket;
+}
+
+int find_next_client(int destination_address) {
+    for (int i = 0; i < number_of_table_entries; i++) {
+        struct table current_table = table[i];
+        if (current_table.to_address == destination_address) {
+            return current_table.first_client_on_route;
+        }
+    }
+    return -1;
+}
+
+void unpack_message_header(unsigned short *to_address, unsigned short *from_address, unsigned short *packet_length, char *message) {
+    int offset_in_message = 0;
+
+    memcpy(packet_length, &(message[offset_in_message]), sizeof(unsigned short));
+    offset_in_message += sizeof(unsigned short);
+
+    memcpy(to_address, &(message[offset_in_message]), sizeof(unsigned short));
+    offset_in_message += sizeof(unsigned short);
+
+    memcpy(from_address, &(message[offset_in_message]), sizeof(unsigned short));
+    offset_in_message += sizeof(unsigned short);
+}
+
+void make_packet(char *buffer, unsigned short packet_length, unsigned short to_address, unsigned short from_address, char *message) {
+
+    int offset_buffer = 0;
+
+    memcpy(&(buffer[offset_buffer]), &packet_length, sizeof(unsigned short));
+    offset_buffer += sizeof(unsigned short);
+
+    memcpy(&(buffer[offset_buffer]), &to_address, sizeof(unsigned short));
+    offset_buffer += sizeof(unsigned short);
+
+    memcpy(&(buffer[offset_buffer]), &from_address, sizeof(unsigned short));
+    offset_buffer += sizeof(unsigned short);
+
+    memcpy(&(buffer[offset_buffer]), message, sizeof(char) * strlen(message));
+
+}
+
+void send_message_udp(int udp_socket, unsigned char to_address, char *message) {
+    struct sockaddr_in send_to_sockaddr;
+
+    send_to_sockaddr.sin_family = AF_INET; 
+    send_to_sockaddr.sin_port = htons(baseport + to_address);
+    send_to_sockaddr.sin_addr.s_addr = INADDR_ANY;
+
+    sendto(udp_socket, message, 1000, 0, (struct sockaddr*)&send_to_sockaddr, sizeof(send_to_sockaddr));
+}
+
+char *split_message_from_file(unsigned short *to_address, char *line_from_file) {
+    char *temp_to_address = strtok(line_from_file, " ");
+    char *rest_of_message = strtok(NULL, "\n");
+    *to_address = (unsigned short) atoi(temp_to_address);
+    return rest_of_message;
+}
+
+void send_messages_start_node(int udp_socket) {
+    FILE *file_pointer = fopen("data.txt", "r");
+
+    char buffer[1024];
+
+    while (fgets(buffer, 1000, file_pointer) != NULL) {
+        unsigned short packet_length = 0;
+        unsigned short to_address = 0;
+
+        char *message = split_message_from_file(&to_address, buffer);
+
+        packet_length = (unsigned short) ((strlen(message) + 1) + (sizeof(unsigned short) * 3));
+
+        char packet[packet_length];
+
+        make_packet(packet, htons(packet_length), htons(to_address), htons(own_address), message);
+
+        int address_next_client = find_next_client((int)to_address);
+
+        if (address_next_client == -1) {
+            printf("Could not find client with address %hu! :(\n", to_address);
+            continue;
+        }
+
+        printf("MESSAGE: %s\n", message);
+
+        print_pkt((unsigned char*) packet);
+        send_message_udp(udp_socket, address_next_client, packet);
+    }
+    fclose(file_pointer);
+}
+
+void receive_messages_nodes(udp_socket) {
+    struct sockaddr_in src;
+    socklen_t src_len = sizeof(src);
+
+    unsigned short to_address = 0;
+    unsigned short from_address = 0;
+    unsigned short packet_length = 0;
+    size_t max_size_message = 1024;
+
+    char *message;
+    while (1) {
+        message = malloc(max_size_message);
+        recvfrom(udp_socket, message, max_size_message, 0, (struct sockaddr*)&src, &src_len);
+        
+        unpack_message_header(&to_address, &from_address, &packet_length, message);
+        to_address = ntohs(to_address);
+        from_address = ntohs(from_address);
+        packet_length = ntohs(packet_length);
+        
+        if ((int)to_address == own_address) {
+            print_received_pkt((unsigned short) own_address, (unsigned char*) message);
+            //packet has reached destination
+            int length_of_header = sizeof(unsigned short) * 3;
+            char *actual_message = message + length_of_header;
+            printf("RECEIVED MESSAGE:\n%s\n", actual_message);
+
+            if (strcmp(actual_message, "QUIT\n") == 0) {
+                printf("QUITTING!");
+                // close(udp_socket);
+                // free(message);
+                // exit(EXIT_SUCCESS);
+            }
+        }
+        else {
+            print_forwarded_pkt((short)own_address, (unsigned char*) message);
+            int address_next_client = find_next_client((int) to_address);
+            if (address_next_client == -1) {
+                printf("Could not find next client! :(\n");
+                continue;
+            }
+            send_message_udp(udp_socket, (short) address_next_client, message);
+        }
+        free(message); //could lead to problems?
+    }
+}
+
+void run_udp_communication(int udp_socket) {
+    if (own_address == 1) {
+        sleep(1);
+        printf("Sending message!\n");
+        send_messages_start_node(udp_socket);
+        //close(udp_socket);
+    }
+
+    else {
+        receive_messages_nodes(udp_socket);
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (argc <= 2) {
         fprintf(stdout, "Number of arguments are too few!\n");
@@ -191,7 +380,7 @@ int main(int argc, char *argv[]) {
 
     int number_of_edges = argc-3;
     char **edges_info = argv + 3;
-    int own_address = atoi(argv[2]);
+    own_address = atoi(argv[2]);
 
     create_node_struct(own_address, edges_info, client_socket, number_of_edges);
 
@@ -201,6 +390,11 @@ int main(int argc, char *argv[]) {
 
     print_node();
 
+    //bind to own socket
+    int udp_socket = create_and_connect_udp_socket();
+    printf("Node %d connected to socket with socket %d!\n", own_address, udp_socket);
+    //run 
+    run_udp_communication(udp_socket);
     free_all();
     return EXIT_SUCCESS; 
 } 
