@@ -284,11 +284,11 @@ void send_messages_start_node(int udp_socket) {
 
         char *message = split_message_from_file(&to_address, buffer);
 
-        packet_length = (unsigned short) ((strlen(message) + 1) + (sizeof(unsigned short) * 3));
+        packet_length = (unsigned short) ((sizeof(unsigned short) * 3) + strlen(message) + 1);
 
         char packet[packet_length];
-
         make_packet(packet, htons(packet_length), htons(to_address), htons(own_address), message);
+        packet[packet_length-1] = '\0';
 
         int address_next_client = find_next_client((int)to_address);
 
@@ -315,10 +315,12 @@ void receive_messages_nodes(udp_socket) {
     size_t max_size_message = 1024;
 
     char *message;
+    ssize_t rec;
     while (1) {
         message = malloc(max_size_message);
-        recvfrom(udp_socket, message, max_size_message, 0, (struct sockaddr*)&src, &src_len);
+        rec = recvfrom(udp_socket, message, max_size_message, 0, (struct sockaddr*)&src, &src_len);
         
+        message[rec-1] = '\0';
         unpack_message_header(&to_address, &from_address, &packet_length, message);
         to_address = ntohs(to_address);
         from_address = ntohs(from_address);
@@ -329,13 +331,13 @@ void receive_messages_nodes(udp_socket) {
             //packet has reached destination
             int length_of_header = sizeof(unsigned short) * 3;
             char *actual_message = message + length_of_header;
-            printf("RECEIVED MESSAGE:\n%s\n", actual_message);
+            printf("RECEIVED MESSAGE: %lu [%s]\n", strlen(actual_message), actual_message);
 
-            if (strcmp(actual_message, "QUIT\n") == 0) {
+            if (strncmp(actual_message, "QUIT", 4) == 0) {
                 printf("QUITTING!");
-                // close(udp_socket);
-                // free(message);
-                // exit(EXIT_SUCCESS);
+                close(udp_socket);
+                free(message);
+                exit(EXIT_SUCCESS);
             }
         }
         else {
@@ -343,6 +345,7 @@ void receive_messages_nodes(udp_socket) {
             int address_next_client = find_next_client((int) to_address);
             if (address_next_client == -1) {
                 printf("Could not find next client! :(\n");
+                free(message);
                 continue;
             }
             send_message_udp(udp_socket, (short) address_next_client, message);

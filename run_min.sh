@@ -37,7 +37,7 @@ cp $MESSAGES_FILENAME "./data.txt"
 sleep 1
 
 # Run all nodes
-./node $BASE_PORT 11 1:2 13:7 19:2     &>"$LOG_DIR/11_log.txt" &
+./node $BASE_PORT 11 1:2 13:7 19:2     &#>"$LOG_DIR/11_log.txt" &
 ./node $BASE_PORT 1 11:2 103:6         &>"$LOG_DIR/1_log.txt" &
 ./node $BASE_PORT 13 11:7 17:3 101:4   &>"$LOG_DIR/13_log.txt" &
 ./node $BASE_PORT 17 13:3 107:2        &>"$LOG_DIR/17_log.txt" &
