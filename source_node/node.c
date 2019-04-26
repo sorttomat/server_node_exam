@@ -290,6 +290,7 @@ void send_messages_start_node(int udp_socket) {
 
         if (address_next_client == -1) {
             printf("Could not find client with address %hu! :(\n", to_address);
+            free(packet);
             continue;
         }
 
