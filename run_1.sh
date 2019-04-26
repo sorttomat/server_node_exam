@@ -14,7 +14,7 @@ if [ $1 -lt $MIN_PORT ] || [ $1 -gt $MAX_PORT ]; then
 fi
 
 BASE_PORT=$1
-MESSAGES_FILENAME="messages_1.txt"
+MESSAGES_FILENAME="data_node/messages_1.txt"
 LOG_DIR="./logs"
 # Set to "valgrind" to run valgrind on nodes and server
 VALGRIND="valgrind"

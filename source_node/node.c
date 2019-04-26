@@ -202,7 +202,7 @@ int create_and_connect_udp_socket() {
     if (own_address == 1) {
         sleep(1);
     }
-    
+
 	ret = bind(udp_socket, (struct sockaddr*)&udp_sockaddr, sizeof(udp_sockaddr));
 	if (ret) {
 		perror("bind");
@@ -301,7 +301,7 @@ void send_messages_start_node(int udp_socket) {
     fclose(file_pointer);
 }
 
-void receive_messages_nodes(udp_socket) {
+void receive_messages_nodes(int udp_socket) {
     struct sockaddr_in src;
     socklen_t src_len = sizeof(src);
 
