@@ -282,7 +282,7 @@ void send_messages_start_node(int udp_socket) {
 
         packet_length = (unsigned short) ((sizeof(unsigned short) * 3) + strlen(message) + 1);
 
-        char packet[packet_length];
+        char *packet = malloc(packet_length);
         make_packet(packet, htons(packet_length), htons(to_address), htons(own_address), message);
         packet[packet_length-1] = '\0';
 
