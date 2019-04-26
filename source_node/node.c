@@ -297,6 +297,8 @@ void send_messages_start_node(int udp_socket) {
 
         print_pkt((unsigned char*) packet);
         send_message_udp(udp_socket, address_next_client, packet);
+
+        free(packet);
     }
     fclose(file_pointer);
 }
