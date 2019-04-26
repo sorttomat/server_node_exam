@@ -10,7 +10,8 @@ node: source_node/*.c source_shared/*.c print_lib/*.c
 	$(CC) $(CCFLAGS) $^ -o $@
 
 run: all
-	bash run.sh
+	bash run_1.sh
+	bash run_2.sh
 
 clean:
 	rm -f routing_server

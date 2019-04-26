@@ -182,7 +182,6 @@ void print_node() {
 }
 
 int create_and_connect_udp_socket() {
-    printf("Node %d connecting to socket!\n", own_address);
     struct sockaddr_in udp_sockaddr;
 	int ret;
     int yes = -1; 
@@ -200,13 +199,10 @@ int create_and_connect_udp_socket() {
 
 	setsockopt(udp_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
 
-    printf("Baseport: %d\tOwn address: %d\tUDP socket: %d\n", baseport, own_address, udp_socket);
-
-
     if (own_address == 1) {
         sleep(1);
     }
-
+    
 	ret = bind(udp_socket, (struct sockaddr*)&udp_sockaddr, sizeof(udp_sockaddr));
 	if (ret) {
 		perror("bind");
@@ -256,7 +252,7 @@ void make_packet(char *buffer, unsigned short packet_length, unsigned short to_a
 
 }
 
-void send_message_udp(int udp_socket, unsigned char to_address, char *message) {
+void send_message_udp(int udp_socket, unsigned short to_address, char *message) {
     struct sockaddr_in send_to_sockaddr;
 
     send_to_sockaddr.sin_family = AF_INET; 
@@ -297,7 +293,7 @@ void send_messages_start_node(int udp_socket) {
             continue;
         }
 
-        printf("MESSAGE: %s\n", message);
+        printf("%d MESSAGE: %s\n", to_address, message);
 
         print_pkt((unsigned char*) packet);
         send_message_udp(udp_socket, address_next_client, packet);
@@ -317,8 +313,10 @@ void receive_messages_nodes(udp_socket) {
     char *message;
     ssize_t rec;
     while (1) {
+        printf("Receiving ....\n");
         message = malloc(max_size_message);
         rec = recvfrom(udp_socket, message, max_size_message, 0, (struct sockaddr*)&src, &src_len);
+        printf("Received\n");
         
         message[rec-1] = '\0';
         unpack_message_header(&to_address, &from_address, &packet_length, message);
@@ -341,14 +339,15 @@ void receive_messages_nodes(udp_socket) {
             }
         }
         else {
-            print_forwarded_pkt((short)own_address, (unsigned char*) message);
+            print_forwarded_pkt((unsigned short)own_address, (unsigned char*) message);
             int address_next_client = find_next_client((int) to_address);
+            printf("FORWARDING TO NEXT CLIENT: %d\n", address_next_client);
             if (address_next_client == -1) {
                 printf("Could not find next client! :(\n");
                 free(message);
                 continue;
             }
-            send_message_udp(udp_socket, (short) address_next_client, message);
+            send_message_udp(udp_socket, (unsigned short) address_next_client, message);
         }
         free(message); //could lead to problems?
     }

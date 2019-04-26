@@ -14,7 +14,7 @@ if [ $1 -lt $MIN_PORT ] || [ $1 -gt $MAX_PORT ]; then
 fi
 
 BASE_PORT=$1
-MESSAGES_FILENAME="messages_2.txt"
+MESSAGES_FILENAME="data_node/messages_2.txt"
 LOG_DIR="./logs"
 # Set to "valgrind" to run valgrind on nodes and server
 VALGRIND=""
@@ -43,7 +43,7 @@ $VALGRIND ./node $BASE_PORT 16 1:8 4:5 8:3 32:2 64:5 256:2 &>"$LOG_DIR/16_log.tx
 $VALGRIND ./node $BASE_PORT 32 8:1 16:2 128:2 256:4        &>"$LOG_DIR/32_log.txt" &
 $VALGRIND ./node $BASE_PORT 64 16:5 256:5                  &>"$LOG_DIR/64_log.txt" &
 $VALGRIND ./node $BASE_PORT 128 32:2 256:3                 &>"$LOG_DIR/128_log.txt" &
-$VALGRIND ./node $BASE_PORT 256 16:2 32:4 64:5 128:3       &>"$LOG_DIR/256_log.txt" &
+$VALGRIND ./node $BASE_PORT 256 16:2 32:4 64:5 128:3       &#>"$LOG_DIR/256_log.txt" &
 
 # Terminate all processes in case of failure
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM
