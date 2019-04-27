@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include "create_sockets.h"
 
 int baseport = 0;
 int own_address;
@@ -21,46 +22,10 @@ int keep_going = 1;
 
 char *quit_char = "QUIT";
 
-int create_and_connect_socket() {
-    struct sockaddr_in server_addr;
-
-    int client_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (client_socket == -1) {
-        perror("socket");
-        return EXIT_FAILURE;
-    }
-
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(baseport);
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-    fprintf(stdout, "Connecting to router ..........\n");
-    int ret = connect(client_socket, (struct sockaddr *)&server_addr, sizeof(struct sockaddr_in));
-    if (ret == -1) {
-        perror("connect");
-        exit(-2);
-    }
-    return client_socket;
-}
-
-int hand_shake(int client_socket) {
-    char buf[strlen(RESPONSE_SUCCESS)];
-
-    ssize_t bytes = receive_message(client_socket, buf, strlen(RESPONSE_SUCCESS)); //could be response_failure
-    if (bytes == -1) {
-        fprintf(stdout, "Something wrong with receive message\n");
-        return EXIT_FAILURE;
-    }
-    if (bytes == 0) {
-        fprintf(stdout, "Server has disconnected\n");
-        return EXIT_SUCCESS; //?
-    }
-
-    buf[bytes] = '\0';
-    fprintf(stdout, "%s\n", buf);
-    return EXIT_SUCCESS;
-}
-
+/*
+Construct message to send to routing_server.
+buffer_to_send is malloced already.
+*/
 void construct_message(char *buffer_to_send) {
     construct_header(buffer_to_send, *node);
 
@@ -76,16 +41,18 @@ void construct_message(char *buffer_to_send) {
     }
 }
 
+/*
+Sending information to routing_server. For explanation about protocol - see README
+*/
 ssize_t send_information(int client_socket) {
     ssize_t bytes = 0;
+    ssize_t size_of_message = (sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges);
 
-    char *buffer_to_send = malloc((sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges));
+    char *buffer_to_send = malloc(size_of_message);
     assert(buffer_to_send);
 
     construct_message(buffer_to_send);
     
-    ssize_t size_of_message = (sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges);
-
     bytes = send_message(client_socket, buffer_to_send, size_of_message);
     if (bytes == -1) {
         free(buffer_to_send);
@@ -94,37 +61,32 @@ ssize_t send_information(int client_socket) {
     if (bytes == 0) {
         fprintf(stdout, "Server has disconnected\n");
         free(buffer_to_send);
-        return EXIT_SUCCESS; //?
+        exit(EXIT_FAILURE); //No point in continuing with this node if server has disconnected.
     }
 
     free(buffer_to_send);
     return bytes;
 }
 
-struct edge create_edge(char *info, int size_of_info) {
+/*
+Param info is a char pointer containing address and weight of edge.
+*/
+struct edge create_edge(char *info) {
     struct edge new_edge;
-    char buf[size_of_info];
-    int size_weight;
 
-    int i = 0;
-    while (info[i] != ':') {
-        buf[i] = info[i];
-        i++;
-    }
-    buf[i] = '\0';
+    char *to_address = strtok(info, ":");
+    char *weight = strtok(NULL, "");
 
-    new_edge.to_address = atoi(buf);
-
-    size_weight = size_of_info-(i);
-    
-    char weight[size_weight];
-    memcpy(&weight, &(info[i+1]), size_weight);
+    new_edge.to_address = atoi(to_address);
     
     new_edge.weight = atoi(weight);
 
     return new_edge;
 }
 
+/*
+Creating node struct and filling it with information about own_address, socket, number of edges and the actual edges (these are edge structs).
+*/
 void create_node_struct(int own_address, char *info_edges[], int client_socket, int number_of_edges) {
 
     node = malloc(sizeof(struct node));
@@ -144,18 +106,24 @@ void create_node_struct(int own_address, char *info_edges[], int client_socket, 
     node->number_of_edges = number_of_edges;
 
     for (int i = 0; i < number_of_edges; i++) {
-        struct edge new_edge = create_edge(info_edges[i], strlen(info_edges[i]));
+        struct edge new_edge = create_edge(info_edges[i]);
         new_edge.from_address = node->own_address;
         edges[i] = new_edge;
     }
 }
 
+/*
+Freeing all global variables.
+*/
 void free_all() {
     free(edges);
     free(node);
     free(table);
 }
 
+/*
+Receiving routing table from routing_server.
+*/
 void receive_table(int client_socket) {
     receive_message(client_socket, &number_of_table_entries, sizeof(int));
 
@@ -163,10 +131,12 @@ void receive_table(int client_socket) {
 
     ssize_t size_of_rest_of_message = number_of_table_entries * sizeof(struct table);
 
-    receive_message(client_socket, table, size_of_rest_of_message);
-    
+    receive_message(client_socket, table, size_of_rest_of_message); 
 }
 
+/*
+Printing all info about node struct.
+*/
 void print_node() {
     fprintf(stdout, "NODE:\n");
 
@@ -186,44 +156,11 @@ void print_node() {
     }
 }
 
-int create_and_connect_udp_socket() {
-    struct sockaddr_in udp_sockaddr;
-	int ret;
-    int yes = -1; 
-    int udp_socket;
 
-	udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
-	if (udp_socket == -1) {
-		perror("socket");
-        exit(EXIT_FAILURE);
-	}
-
-	udp_sockaddr.sin_family = AF_INET; 
-	udp_sockaddr.sin_port = htons(baseport + own_address);	
-    udp_sockaddr.sin_addr.s_addr = INADDR_ANY;
-
-	setsockopt(udp_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
-
-    if (own_address == 1) {
-        sleep(1);
-    }
-
-    if (baseport + own_address > 65500) {
-        printf("Invalid own address\n");
-        close(udp_socket);
-        return EXIT_FAILURE;
-    }
-
-	ret = bind(udp_socket, (struct sockaddr*)&udp_sockaddr, sizeof(udp_sockaddr));
-	if (ret) {
-		perror("bind");
-        close(udp_socket);
-        return EXIT_FAILURE;
-	}
-
-    return udp_socket;
-}
-
+/*
+Looking through routing table, returning address of first client on route to destination_address.
+If no address is found, -1 is returned. This means that this client is not really on route from node 1 to destination_address, and packet has arrived at wrong client.
+*/
 int find_next_client(int destination_address) {
     for (int i = 0; i < number_of_table_entries; i++) {
         struct table current_table = table[i];
@@ -234,6 +171,9 @@ int find_next_client(int destination_address) {
     return -1;
 }
 
+/*
+Unpacking message header received via UDP from another client.
+*/
 void unpack_message_header(unsigned short *to_address, unsigned short *packet_length, char *message) {
     int offset_in_message = 0;
 
@@ -243,6 +183,9 @@ void unpack_message_header(unsigned short *to_address, unsigned short *packet_le
     memcpy(to_address, &(message[offset_in_message]), sizeof(unsigned short));
 }
 
+/*
+Making packet to send via UDP (function used only be node 1)
+*/
 void make_packet(char *buffer, unsigned short packet_length, unsigned short to_address, unsigned short from_address, char *message) {
 
     int offset_buffer = 0;
@@ -260,6 +203,9 @@ void make_packet(char *buffer, unsigned short packet_length, unsigned short to_a
 
 }
 
+/*
+Send message to other client via UDP.
+*/
 void send_message_udp(int udp_socket, unsigned short to_address, unsigned short packet_length, char *message) {
     struct sockaddr_in send_to_sockaddr;
 
@@ -270,6 +216,9 @@ void send_message_udp(int udp_socket, unsigned short to_address, unsigned short 
     sendto(udp_socket, message, packet_length, 0, (struct sockaddr*)&send_to_sockaddr, sizeof(send_to_sockaddr));
 }
 
+/*
+Splitting one line from file (consisting of address of destination client and message), putting first psrt (address) into to_address and returning rest.
+*/
 char *split_message_from_file(unsigned short *to_address, char *line_from_file) {
     char *temp_to_address = strtok(line_from_file, " ");
     char *rest_of_message = strtok(NULL, "\n");
@@ -277,6 +226,16 @@ char *split_message_from_file(unsigned short *to_address, char *line_from_file) 
     return rest_of_message;
 }
 
+/*
+Node with own_address = 1 runs this function.
+Line is read from file
+Line is splitted
+Check to see if destination address == own_address
+Calculating length of packet (packet_length)
+Making actual packet
+Finding first client on route to destination address (checking routing table)
+Sending packet
+*/
 void send_messages_start_node(int udp_socket) {
     FILE *file_pointer = fopen("data.txt", "r");
 
@@ -318,6 +277,9 @@ void send_messages_start_node(int udp_socket) {
     fclose(file_pointer);
 }
 
+/*
+Packet has arrived at destination.
+*/
 int packet_arrived(char *message) {
     print_received_pkt((unsigned short) own_address, (unsigned char*) message);
 
@@ -331,6 +293,9 @@ int packet_arrived(char *message) {
     return keep_going;
 }
 
+/*
+Forwarding message to next client
+*/
 void forward_message(int udp_socket, char *message, unsigned short to_address, unsigned short packet_length) {
     print_forwarded_pkt((unsigned short)own_address, (unsigned char*) message);
 
@@ -343,6 +308,15 @@ void forward_message(int udp_socket, char *message, unsigned short to_address, u
     send_message_udp(udp_socket, (unsigned short) address_next_client, packet_length, message);
 }
 
+/*
+All clients other than client 1 runs this function.
+Receiving message into char pinter message (parameter) (taken in as parameter because it is malloced on the outside)
+Making sure it is null terminated.
+Unpacking the header (only need packet length and destination address at this point)
+
+If the packet has arrived at destination -> packet_arrived
+Else -> find first client on route to destination -> forward_message
+*/
 int receive_message_udp(int udp_socket, char *message, int max_size_message) {
     struct sockaddr_in src;
     socklen_t src_len = sizeof(src);
@@ -375,6 +349,9 @@ int receive_message_udp(int udp_socket, char *message, int max_size_message) {
     return keep_going;
 }
 
+/*
+While client has not received packet containing "EXIT", client continues to receive messages.
+*/
 void receive_messages_nodes(int udp_socket) {
     size_t max_size_message = 1024;
 
@@ -408,7 +385,7 @@ int main(int argc, char *argv[]) {
 
     baseport = atoi(argv[1]);
 
-    int client_socket = create_and_connect_socket();
+    int client_socket = create_and_connect_socket(baseport);
     if (client_socket == EXIT_FAILURE) {
         exit(-2);
     }
@@ -428,7 +405,7 @@ int main(int argc, char *argv[]) {
 
     print_node();
 
-    int udp_socket = create_and_connect_udp_socket();
+    int udp_socket = create_and_connect_udp_socket(baseport, own_address);
     if (udp_socket == EXIT_FAILURE) {
         free_all();
         exit(-1);

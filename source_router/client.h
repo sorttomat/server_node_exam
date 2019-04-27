@@ -11,6 +11,6 @@ struct client {
     struct edge *edges;
 };
 
-int MAX_NUM_CLIENTS;
+int max_num_clients;
 struct client *clients;
 #endif
