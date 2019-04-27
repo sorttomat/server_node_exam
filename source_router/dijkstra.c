@@ -136,7 +136,7 @@ Running dijkstra.
 1. Creating array of dijkstra nodes
 2. Finding start node, visit start node and updating start nodes neighbors 
 3. While not yet all clients have been visited, visit one by one and update nodes as I go.
-4. For every node, shortest path from node 1 to that node is printed out (can be seen in 1_log_txt)
+4. For every node, shortest path from node 1 to that node is printed out (can be seen in routing_server_log_txt)
 */
 void dijkstra() {
     make_array_for_dijkstra();
