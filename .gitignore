@@ -4,3 +4,4 @@ node
 routing_server
 logs/*
 logfile.txt
+data.txt

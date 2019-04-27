@@ -357,6 +357,8 @@ void receive_messages_nodes(int udp_socket) {
     ssize_t rec;
     while (1) {
         message = malloc(max_size_message);
+        assert(message);
+        
         receive_message_udp(udp_socket, message, max_size_message);
         free(message);
     }
