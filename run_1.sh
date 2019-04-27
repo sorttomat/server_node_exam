@@ -17,7 +17,7 @@ BASE_PORT=$1
 MESSAGES_FILENAME="data_node/messages_1.txt"
 LOG_DIR="./logs"
 # Set to "valgrind" to run valgrind on nodes and server
-VALGRIND="valgrind"
+VALGRIND="valgrind -v"
 
 # Put logfiles here
 if [ ! -d $LOG_DIR ]; then
