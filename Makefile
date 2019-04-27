@@ -1,5 +1,5 @@
 CC = gcc
-CCFLAGS= -g -std=c99
+CCFLAGS= -g -Wall -Wextra -Wpedantic -std=c99
 
 all: clean routing_server node #dijkstra
 

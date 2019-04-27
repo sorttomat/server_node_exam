@@ -10,10 +10,10 @@ void construct_header(char *buffer, struct node node_to_send) {
     memcpy(&(buffer[4]), &(node_to_send.number_of_edges), sizeof(int));
 }
 
-int receive_message(int client_socket, void *buf, size_t total_bytes_to_receive) {
+ssize_t receive_message(int client_socket, void *buf, ssize_t total_bytes_to_receive) {
     char *char_buf;
-    size_t received_bytes_this_round = 0;
-    size_t total_bytes_received = 0;
+    ssize_t received_bytes_this_round = 0;
+    ssize_t total_bytes_received = 0;
 
     char_buf = buf;
     while (total_bytes_received < total_bytes_to_receive) {
@@ -33,10 +33,10 @@ int receive_message(int client_socket, void *buf, size_t total_bytes_to_receive)
     return total_bytes_received;
 }
 
-int send_message(int client_socket, void *buf, size_t total_bytes_to_send) {
+ssize_t send_message(int client_socket, void *buf, ssize_t total_bytes_to_send) {
     char *char_buf;
-    size_t received_bytes_this_round = 0;
-    size_t total_bytes_sent = 0;
+    ssize_t received_bytes_this_round = 0;
+    ssize_t total_bytes_sent = 0;
 
     char_buf = buf;
     while (total_bytes_sent < total_bytes_to_send) {

@@ -44,7 +44,7 @@ int create_and_connect_socket() {
 int hand_shake(int client_socket) {
     char buf[strlen(RESPONSE_SUCCESS)];
 
-    size_t bytes = receive_message(client_socket, buf, strlen(RESPONSE_SUCCESS)); //could be response_failure
+    ssize_t bytes = receive_message(client_socket, buf, strlen(RESPONSE_SUCCESS)); //could be response_failure
     if (bytes == -1) {
         fprintf(stdout, "Something wrong with receive message\n");
         return EXIT_FAILURE;
@@ -74,15 +74,15 @@ void construct_message(char *buffer_to_send) {
     }
 }
 
-size_t send_information(int client_socket) {
-    size_t bytes = 0;
+ssize_t send_information(int client_socket) {
+    ssize_t bytes = 0;
 
     char *buffer_to_send = malloc((sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges));
     assert(buffer_to_send);
 
     construct_message(buffer_to_send);
     
-    size_t size_of_message = (sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges);
+    ssize_t size_of_message = (sizeof(int) * 2) + (sizeof(struct edge) * node->number_of_edges);
 
     bytes = send_message(client_socket, buffer_to_send, size_of_message);
     if (bytes == -1) {
@@ -159,7 +159,7 @@ void receive_table(int client_socket) {
 
     table = calloc(number_of_table_entries, sizeof(struct table));
 
-    size_t size_of_rest_of_message = number_of_table_entries * sizeof(struct table);
+    ssize_t size_of_rest_of_message = number_of_table_entries * sizeof(struct table);
 
     receive_message(client_socket, table, size_of_rest_of_message);
     
@@ -301,7 +301,7 @@ void send_messages_start_node(int udp_socket) {
     fclose(file_pointer);
 }
 
-int packet_arrived(int udp_socket, char *message) {
+int packet_arrived(char *message) {
     print_received_pkt((unsigned short) own_address, (unsigned char*) message);
 
     int length_of_header = sizeof(unsigned short) * 3;
@@ -341,11 +341,11 @@ int receive_message_udp(int udp_socket, char *message, int max_size_message) {
 
     if (rec != (ssize_t) packet_length) {
         printf("Only %zu out of %hu bytes received.\n", rec, packet_length);
-        return;
+        return keep_going;
     }
     
     if ((int)to_address == own_address) {
-        if (packet_arrived(udp_socket, message) == quit){
+        if (packet_arrived(message) == quit){
             return quit;
         }
     }
@@ -359,7 +359,6 @@ void receive_messages_nodes(int udp_socket) {
     size_t max_size_message = 1024;
 
     char *message;
-    ssize_t rec;
     int keep_looping = keep_going;
     while (keep_looping != quit) {
         message = malloc(max_size_message);

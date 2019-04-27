@@ -1,6 +1,5 @@
 
 #include "../source_shared/protocol.h"
-#include "routing_server.h"
 #include "../print_lib/print_lib.h"
 #include <stdbool.h>
 #include "dijkstra.h"
@@ -135,8 +134,8 @@ struct client* find_client_in_array(int client_socket) {
     return NULL;
 }
 
-size_t receive_information_fill_node(int client_socket) {
-    size_t bytes = 0;
+ssize_t receive_information_fill_node(int client_socket) {
+    ssize_t bytes = 0;
     int number_of_edges = 0;
     int own_address = 0;
 
@@ -168,7 +167,7 @@ size_t receive_information_fill_node(int client_socket) {
 
 int receive_from_client(int client_socket) {
     printf("Receiving from socket %d\n", client_socket);
-    size_t bytes;
+    ssize_t bytes;
 
     bytes = receive_information_fill_node(client_socket);
 
