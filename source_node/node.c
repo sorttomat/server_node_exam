@@ -290,6 +290,7 @@ void send_messages_start_node(int udp_socket) {
 
         if ((int) to_address == own_address) {
             if (strcmp(message, quit_char) == 0) {
+                fclose(file_pointer);
                 return;
             }
         }
