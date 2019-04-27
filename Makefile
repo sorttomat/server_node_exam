@@ -1,7 +1,7 @@
 CC = gcc
 CCFLAGS= -g -Wall -Wextra -Wpedantic -std=c99
 
-all: clean routing_server node #dijkstra
+all: clean routing_server node 
 
 routing_server: source_router/*.c source_shared/*.c print_lib/*.c
 	$(CC) $(CCFLAGS) $^ -o $@

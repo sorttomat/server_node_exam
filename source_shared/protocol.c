@@ -27,8 +27,6 @@ ssize_t receive_message(int client_socket, void *buf, ssize_t total_bytes_to_rec
             break;
         }
         total_bytes_received += received_bytes_this_round;
-        printf("%zu ? %zu\n", total_bytes_received, total_bytes_to_receive);
-
     }
     return total_bytes_received;
 }
@@ -50,8 +48,6 @@ ssize_t send_message(int client_socket, void *buf, ssize_t total_bytes_to_send) 
             break;
         }
         total_bytes_sent += received_bytes_this_round;
-        printf("%zu ? %zu\n", total_bytes_sent, total_bytes_to_send);
-
     }
     return total_bytes_sent;
 }

@@ -19,6 +19,8 @@ struct sockaddr_in udp_sockaddr;
 int quit = 0;
 int keep_going = 1;
 
+char *quit_char = "QUIT";
+
 int create_and_connect_socket() {
     struct sockaddr_in server_addr;
 
@@ -36,7 +38,7 @@ int create_and_connect_socket() {
     int ret = connect(client_socket, (struct sockaddr *)&server_addr, sizeof(struct sockaddr_in));
     if (ret == -1) {
         perror("connect");
-        return EXIT_FAILURE;
+        exit(-2);
     }
     return client_socket;
 }
@@ -170,7 +172,7 @@ void print_node() {
 
     fprintf(stdout, "Own address: %d\tClient socket: %d\tNumber of edges: %d\n\n", node->own_address, node->client_socket, node->number_of_edges);
 
-    fprintf(stdout, "EDGES:\n");
+    fprintf(stdout, "EDGES: (including invalid edges that routing server will delete)\n");
     for (int i = 0; i < node->number_of_edges; i++) {
         fprintf(stdout, "To: %d\tFrom: %d\tWeight: %d\n", node->edges[i].to_address, node->edges[i].from_address, node->edges[i].weight);
     }
@@ -206,10 +208,17 @@ int create_and_connect_udp_socket() {
         sleep(1);
     }
 
+    if (baseport + own_address > 65500) {
+        printf("Invalid own address\n");
+        close(udp_socket);
+        return EXIT_FAILURE;
+    }
+
 	ret = bind(udp_socket, (struct sockaddr*)&udp_sockaddr, sizeof(udp_sockaddr));
 	if (ret) {
 		perror("bind");
-        exit(EXIT_FAILURE);
+        close(udp_socket);
+        return EXIT_FAILURE;
 	}
 
     return udp_socket;
@@ -274,10 +283,16 @@ void send_messages_start_node(int udp_socket) {
     char buffer[1024];
 
     while (fgets(buffer, 1000, file_pointer) != NULL) {
-        unsigned short packet_length = 0;
+        unsigned short packet_length;
         unsigned short to_address = 0;
 
         char *message = split_message_from_file(&to_address, buffer);
+
+        if ((int) to_address == own_address) {
+            if (strcmp(message, quit_char) == 0) {
+                return;
+            }
+        }
 
         packet_length = (unsigned short) ((sizeof(unsigned short) * 3) + strlen(message) + 1);
 
@@ -294,6 +309,7 @@ void send_messages_start_node(int udp_socket) {
         }
 
         print_pkt((unsigned char*) packet);
+        printf("Sending message to address %hu: %s\n", to_address, message);
         send_message_udp(udp_socket, address_next_client, packet_length, packet);
 
         free(packet);
@@ -307,7 +323,8 @@ int packet_arrived(char *message) {
     int length_of_header = sizeof(unsigned short) * 3;
     char *actual_message = message + length_of_header;
 
-    if (strcmp(actual_message, "QUIT") == 0) {
+    printf("Received message: %s\n", actual_message);
+    if (strcmp(actual_message, quit_char) == 0) {
         return quit;
     }
     return keep_going;
@@ -315,11 +332,13 @@ int packet_arrived(char *message) {
 
 void forward_message(int udp_socket, char *message, unsigned short to_address, unsigned short packet_length) {
     print_forwarded_pkt((unsigned short)own_address, (unsigned char*) message);
+
     int address_next_client = find_next_client((int) to_address);
     if (address_next_client == -1) {
-        printf("Could not find next client! :(\n");
+        printf("Could not find next client! \n");
         return;
     }
+
     send_message_udp(udp_socket, (unsigned short) address_next_client, packet_length, message);
 }
 
@@ -387,9 +406,10 @@ int main(int argc, char *argv[]) {
     }
 
     baseport = atoi(argv[1]);
+
     int client_socket = create_and_connect_socket();
     if (client_socket == EXIT_FAILURE) {
-        exit(EXIT_FAILURE);
+        exit(-2);
     }
 
     hand_shake(client_socket);
@@ -408,9 +428,12 @@ int main(int argc, char *argv[]) {
     print_node();
 
     int udp_socket = create_and_connect_udp_socket();
-    printf("Node %d connected to socket with socket %d!\n", own_address, udp_socket);
-
-    run_udp_communication(udp_socket);
+    if (udp_socket == EXIT_FAILURE) {
+        free_all();
+        exit(-1);
+    }
+    
+    run_udp_communication(udp_socket);    
     close(udp_socket);
     free_all();
     return EXIT_SUCCESS; 

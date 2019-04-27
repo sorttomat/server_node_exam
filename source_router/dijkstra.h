@@ -14,7 +14,7 @@ struct dijkstra_node {
 
 struct dijkstra_node *array_of_dijkstra_nodes;
 
-void new_dijkstra();
+void dijkstra();
 bool is_on_path(int address, int path[], int path_length);
 #endif
 

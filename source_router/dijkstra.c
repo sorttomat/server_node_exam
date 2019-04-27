@@ -113,7 +113,7 @@ bool is_on_path(int address, int path[], int path_length) {
     return false;
 }
 
-void new_dijkstra() {
+void dijkstra() {
     make_array_for_dijkstra();
 
     int number_of_unvisited_nodes = MAX_NUM_CLIENTS;

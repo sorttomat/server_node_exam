@@ -17,6 +17,7 @@ void print_edge(struct edge edge);
 void remove_client(int client_socket) {
     for (int i = 0; i < MAX_NUM_CLIENTS; ++i) {
         if (clients[i].client_socket == client_socket) {
+            close(client_socket);
             clients[i].client_socket = -1;
             free(clients[i].ip);
             free(clients[i].edges);
@@ -59,7 +60,6 @@ int create_server_socket() {
 }
 
 int add_client(int socket, struct sockaddr_in *client_addr, socklen_t addrlen) {
-    printf("Adding client\n");
     char *ip_buffer = malloc(16);
     int i;
 
@@ -75,7 +75,6 @@ int add_client(int socket, struct sockaddr_in *client_addr, socklen_t addrlen) {
             clients[i].ip = ip_buffer;
             clients[i].port = ntohs(client_addr->sin_port);
 
-            printf("Sending message_success\n");
             send_message(socket, RESPONSE_SUCCESS, strlen(RESPONSE_SUCCESS));
             return 0;
         }
@@ -93,7 +92,6 @@ int accept_new_client(int socket_listener) {
     socklen_t addrlen = sizeof(struct sockaddr_in);
 
     int client_socket = accept(socket_listener, (struct sockaddr*) &client_addr, &addrlen);
-    printf("client accepted");
     if (client_socket == -1) {
         perror("accept");
         return -1;
@@ -141,7 +139,6 @@ ssize_t receive_information_fill_node(int client_socket) {
 
     bytes = deconstruct_header(client_socket, &own_address, &number_of_edges);
     
-    printf("NUMBER OF EDGES NODE %d: %d\n", own_address, number_of_edges);
     size_t size_of_edges = number_of_edges * sizeof(struct edge);
 
     char information[size_of_edges];
@@ -166,7 +163,6 @@ ssize_t receive_information_fill_node(int client_socket) {
 }
 
 int receive_from_client(int client_socket) {
-    printf("Receiving from socket %d\n", client_socket);
     ssize_t bytes;
 
     bytes = receive_information_fill_node(client_socket);
@@ -179,20 +175,13 @@ int receive_from_client(int client_socket) {
         printf("Disconnection\n");
         return 0;
     }
-
-    printf("Number of bytes: %zu\nFrom socket: %d\n", bytes, client_socket);
-
     return 1;
 }
 
 int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *largest_fd) {
-        /* Go through all possible file descriptors */
     for (int i = 0; i <= *largest_fd; ++i) {
         if (FD_ISSET(i, read_fds)) {
-            printf("Looking at socket %d\n", i);
             if (i == socket_listener) {
-                /* Accept new client */
-                printf("Accepting new client\n");
                 int client_socket = accept_new_client(socket_listener);
 
                 if (client_socket == -1) {
@@ -206,11 +195,9 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
                 FD_SET(client_socket, fds);
             } 
             else {
-                /* Receive from existing client */
                 int ret = receive_from_client(i);
                 if (ret == -1) {
                     printf("Error in receive_from_client\n");
-                    //clean up?
                     return -1;
                 }
                 
@@ -232,7 +219,7 @@ int go_through_fds(int socket_listener, fd_set *read_fds, fd_set *fds, int *larg
     return 0;
 }
 
-size_t send_all_clients_added() {
+ssize_t send_all_clients_added() {
     printf("All clients added!\n");
     ssize_t bytes; 
 
@@ -271,47 +258,37 @@ void run_server(int socket_listener) {
             return;
         }
 
-        /* Go through all possible file descriptors */
         ret = go_through_fds(socket_listener, &read_fds, &fds, &largest_fd);
         if (ret == -1) {
             printf("Error in go_through_fds\n");
-            //clean up?
-            //exit?
         }
     }
 }
 
-int edges_are_two_ways(struct edge edge_a, struct edge edge_b) {
-    int yes = 1;
-    int no = 0;
-
+bool edges_are_two_ways(struct edge edge_a, struct edge edge_b) {
     if (edge_a.to_address == edge_b.from_address) {
         if (edge_a.from_address == edge_b.to_address) {
             if (edge_a.weight == edge_b.weight) {
-                return yes;
+                return true;
             }
         }
     }
-    return no;
+    return false;
 }
 
-int edges_equal(struct edge edge_a, struct edge edge_b) {
-    int yes = 1;
-    int no = 0;
+bool edges_equal(struct edge edge_a, struct edge edge_b) {
 
     if (edge_a.to_address == edge_b.to_address) {
         if (edge_a.from_address == edge_b.from_address) {
             if (edge_a.weight == edge_b.weight) {
-                return yes;
+                return true;
             }
         }
     }
-    return no;
+    return false;
 }
 
-int edge_goes_both_ways(struct edge edge) {
-    int yes = 1;
-    int no = 0;
+bool edge_goes_both_ways(struct edge edge) {
 
     for (int i = 0; i < number_of_clients; i++) {
         struct client current_client = clients[i];
@@ -319,12 +296,12 @@ int edge_goes_both_ways(struct edge edge) {
         for (int j = 0; j < current_client.number_of_edges; j++) {
             struct edge current_edge = current_client.edges[j];
 
-            if (edges_are_two_ways(current_edge, edge) == 1) {
-                return yes;
+            if (edges_are_two_ways(current_edge, edge) == true) {
+                return true;
             }
         }
     }
-    return no;
+    return false;
 }
 
 void delete_edge(struct edge edge, struct client *client) {
@@ -332,7 +309,7 @@ void delete_edge(struct edge edge, struct client *client) {
     for (int i = 0; i < client->number_of_edges; i++) {
         struct edge current_edge = client->edges[i];
 
-        if (edges_equal(current_edge, edge) == 1) {
+        if (edges_equal(current_edge, edge) == true) {
             client->edges[i] = client->edges[client->number_of_edges -1];
             client->number_of_edges --;
         }
@@ -345,8 +322,11 @@ void check_two_way_edges() {
 
         for (int j = 0; j < current_client->number_of_edges; j++) {
             struct edge current_edge = current_client->edges[j];
-            if (edge_goes_both_ways(current_edge) == 0) {
+            if (edge_goes_both_ways(current_edge) == false) {
+                printf("Deleting edge: \n");
+                print_edge(current_edge);
                 delete_edge(current_edge, current_client);
+                
             }
         }
     }
@@ -441,8 +421,6 @@ void send_table_client(struct dijkstra_node node, struct table table[], int numb
     create_packet(buffer, table, number_of_entries);
 
     send_message(client_socket, buffer, size_of_message);
-
-    //free(buffer);
 }
 
 void send_tables_all_clients() {
@@ -467,20 +445,17 @@ int main(int argc, char *argv[]) {
     int server_socket = create_server_socket();
 
     clients = calloc(MAX_NUM_CLIENTS, sizeof(struct client));
-    printf("Starting server\n");
     run_server(server_socket);
-    printf("Finished server\n");
 
-    printf("Starting to check two way edges\n");
     check_two_way_edges();
-    printf("Finished\n");
 
     array_of_dijkstra_nodes = calloc(MAX_NUM_CLIENTS, sizeof(struct dijkstra_node));
-    new_dijkstra();
+    dijkstra();
     print_all_combinations();
 
     send_tables_all_clients();
 
+    close(server_socket);
     free_all();
     return 0;
 }
