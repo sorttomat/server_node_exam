@@ -16,6 +16,9 @@ int number_of_table_entries;
 
 struct sockaddr_in udp_sockaddr;
 
+int quit = 0;
+int keep_going = 1;
+
 int create_and_connect_socket() {
     struct sockaddr_in server_addr;
 
@@ -298,17 +301,16 @@ void send_messages_start_node(int udp_socket) {
     fclose(file_pointer);
 }
 
-void packet_arrived(int udp_socket, char *message) {
+int packet_arrived(int udp_socket, char *message) {
     print_received_pkt((unsigned short) own_address, (unsigned char*) message);
-    //packet has reached destination
+
     int length_of_header = sizeof(unsigned short) * 3;
     char *actual_message = message + length_of_header;
 
     if (strcmp(actual_message, "QUIT") == 0) {
-        close(udp_socket);
-        free(message);
-        exit(EXIT_SUCCESS);
+        return quit;
     }
+    return keep_going;
 }
 
 void forward_message(int udp_socket, char *message, unsigned short to_address, unsigned short packet_length) {
@@ -321,7 +323,7 @@ void forward_message(int udp_socket, char *message, unsigned short to_address, u
     send_message_udp(udp_socket, (unsigned short) address_next_client, packet_length, message);
 }
 
-void receive_message_udp(int udp_socket, char *message, int max_size_message) {
+int receive_message_udp(int udp_socket, char *message, int max_size_message) {
     struct sockaddr_in src;
     socklen_t src_len = sizeof(src);
 
@@ -343,11 +345,14 @@ void receive_message_udp(int udp_socket, char *message, int max_size_message) {
     }
     
     if ((int)to_address == own_address) {
-        packet_arrived(udp_socket, message);
+        if (packet_arrived(udp_socket, message) == quit){
+            return quit;
+        }
     }
     else {
         forward_message(udp_socket, message, to_address, packet_length);
     }
+    return keep_going;
 }
 
 void receive_messages_nodes(int udp_socket) {
@@ -355,11 +360,12 @@ void receive_messages_nodes(int udp_socket) {
 
     char *message;
     ssize_t rec;
-    while (1) {
+    int keep_looping = keep_going;
+    while (keep_looping != quit) {
         message = malloc(max_size_message);
         assert(message);
-        
-        receive_message_udp(udp_socket, message, max_size_message);
+
+        keep_looping = receive_message_udp(udp_socket, message, max_size_message);
         free(message);
     }
 }
@@ -368,7 +374,6 @@ void run_udp_communication(int udp_socket) {
     if (own_address == 1) {
         sleep(1);
         send_messages_start_node(udp_socket);
-        close(udp_socket);
     }
 
     else {
@@ -399,14 +404,15 @@ int main(int argc, char *argv[]) {
     send_information(client_socket);
 
     receive_table(client_socket);
+    close(client_socket);
 
     print_node();
 
-    //bind to own socket
     int udp_socket = create_and_connect_udp_socket();
     printf("Node %d connected to socket with socket %d!\n", own_address, udp_socket);
-    //run 
+
     run_udp_communication(udp_socket);
+    close(udp_socket);
     free_all();
     return EXIT_SUCCESS; 
 } 
